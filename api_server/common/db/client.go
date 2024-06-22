@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"main/models/account"
+	"main/models/transaction"
 	"os"
 	"sync"
 
@@ -38,15 +40,18 @@ func GetAccountDBClient() (*gorm.DB, error) {
 		if err != nil {
 			log.Fatalf("failed to connect database: %v", err)
 		}
+		_ = accountDB.AutoMigrate(account.Account{})
+		_ = accountDB.AutoMigrate(account.FundMovement{})
 	})
 	if accountDB == nil {
 		return nil, errors.New("failed to init database")
 	}
+
 	return accountDB, nil
 }
 
 func GetTransactionDB() (*gorm.DB, error) {
-	accountOnce.Do(func() {
+	transactionOnce.Do(func() {
 		dbHost := os.Getenv("DATABASE_HOST")
 		dbPort := os.Getenv("DATABASE_PORT")
 		dbUser := os.Getenv("DATABASE_USER")
@@ -59,9 +64,11 @@ func GetTransactionDB() (*gorm.DB, error) {
 		if err != nil {
 			log.Fatalf("failed to connect database: %v", err)
 		}
+		_ = transactionDB.AutoMigrate(transaction.Transaction{})
 	})
 	if transactionDB == nil {
 		return nil, errors.New("failed to init database")
 	}
+
 	return transactionDB, nil
 }
