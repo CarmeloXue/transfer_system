@@ -9,34 +9,22 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf
     depends_on:
-      - account_service
-      - transaction_service
+      - api_server
 
-  account_service:
-      build: .
-      ports:
-        - "8080:8080"
-      environment:
-        - DATABASE_HOST=db
-        - DATABASE_USER=postgres
-        - DATABASE_PASSWORD=example
-        - DATABASE_NAME=mydb
-        - DATABASE_PORT=5432
-      depends_on:
-        - db
-
-  transaction_service:
-    build: .
-    ports:
-      - "8081:8081"
+  api_server:
+    build:
+      context: ./api_server
+      dockerfile: Dockerfile
+    container_name: api_server
+    expose:
+      - "8080"
     environment:
       - DATABASE_HOST=db
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=example
-      - DATABASE_NAME=mydb
       - DATABASE_PORT=5432
-    depends_on:
-      - db
+    volumes:
+      - ./logs:/root/logs  # Mount a local directory for logs
 
   db:
     image: postgres:latest
@@ -47,15 +35,7 @@ services:
       POSTGRES_PASSWORD: example
     volumes:
       - ./sql/create_databases.sql:/docker-entrypoint-initdb.d/create_databases.sql
-      - ./sql/create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
       - db_data:/var/lib/postgresql/data
-      
-  redis:
-    image: redis:latest
-    container_name: redis
-    volumes:
-      - redis_data:/data
 
 volumes:
   db_data:
-  redis_data:

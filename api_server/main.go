@@ -23,10 +23,10 @@ func main() {
 	r.Use(gin.Recovery())
 
 	logger := log.GetLogger()
-	logger.Info("Account Server started")
-	router := gin.Default()
+	logger.Info("Server started")
 
-	handlers.RegisterAccountHanders(router)
+	handlers.RegisterAccountHanders(r)
+	handlers.RegisterTransactionHandlers(r)
 
 	srv := &http.Server{
 		Addr:    ":8080",
@@ -39,11 +39,11 @@ func main() {
 			logger.Error(fmt.Sprintf("listen: %s\n", err))
 		}
 	}()
-	logger.Info("Account Server started on :8080")
+	logger.Info("Server started on :8080")
 	// Setup graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	logger.Info("Shutting down account server...")
+	logger.Info("Shutting down server...")
 
 }
