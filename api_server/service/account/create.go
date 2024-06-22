@@ -3,8 +3,8 @@ package account
 import (
 	"context"
 	"main/common/log"
+	"main/common/utils"
 	"main/models/account"
-	"strconv"
 )
 
 type (
@@ -21,8 +21,7 @@ type (
 )
 
 func (s *accountService) CreateAccount(ctx context.Context, req CreateAccountRequest) (CreateAccountResponse, error) {
-
-	floatValue, err := strconv.ParseFloat(req.InitialBalance, 64)
+	floatValue, err := utils.ParseFloat64String(req.InitialBalance)
 	if err != nil {
 		log.GetLogger().Error(err.Error())
 		return CreateAccountResponse{}, err
