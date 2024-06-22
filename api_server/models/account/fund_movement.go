@@ -2,6 +2,13 @@ package account
 
 import "time"
 
+type FundMovementDirection string
+
+var (
+	Payment         FundMovementDirection = "Payment"
+	PaymentReceived FundMovementDirection = "PaymentReceived"
+)
+
 type FundMovement struct {
 	ID                   int       `gorm:"primaryKey;column:id" json:"id"`
 	TransactionID        int       `gorm:"column:transaction_id" json:"transaction_id"`
