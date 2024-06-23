@@ -1,13 +1,17 @@
 package transaction
 
 import (
+	"context"
+	. "main/model"
+	"time"
+
 	"gorm.io/gorm"
 )
 
 type Repository interface {
-	CreateTransaction(transaction Transaction) error
-	GetTransactionByID(id string) (Transaction, error)
-	UpdateTransactionStatus(id, status string) error
+	CreateTransaction(ctx context.Context, transaction Transaction) error
+	GetTransactionByID(ctx context.Context, id string) (Transaction, error)
+	UpdateTransactionStatus(ctx context.Context, id string, status string) error
 }
 
 type repository struct {
@@ -18,18 +22,20 @@ func NewRepository(db *gorm.DB) Repository {
 	return &repository{db: db}
 }
 
-func (r *repository) CreateTransaction(transaction Transaction) error {
-	return r.db.Create(&transaction).Error
+func (r *repository) CreateTransaction(ctx context.Context, transaction Transaction) error {
+	ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*2)
+	defer cancel()
+	return r.db.WithContext(ctxTimeout).Create(&transaction).Error
 }
 
-func (r *repository) GetTransactionByID(id string) (Transaction, error) {
+func (r *repository) GetTransactionByID(ctx context.Context, id string) (Transaction, error) {
 	var transaction Transaction
-	if err := r.db.Where("id = ?", id).First(&transaction).Error; err != nil {
+	if err := r.db.Where("transaction_id = ?", id).First(&transaction).Error; err != nil {
 		return Transaction{}, err
 	}
 	return transaction, nil
 }
 
-func (r *repository) UpdateTransactionStatus(id, status string) error {
-	return r.db.Model(&Transaction{}).Where("id = ?", id).Update("status", status).Error
+func (r *repository) UpdateTransactionStatus(ctx context.Context, id string, status string) error {
+	return r.db.Model(&Transaction{}).Where("transaction_id = ?", id).Update("status", status).Error
 }

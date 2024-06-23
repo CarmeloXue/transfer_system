@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Handler struct {
@@ -19,7 +20,7 @@ func NewHandler(service Service) *Handler {
 func (h *Handler) CreateAccount(c *gin.Context) {
 	var req CreateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ErrorParam(c, err.Error())
 		return
 	}
 	if err := h.service.CreateAccount(c, req); err != nil {
@@ -31,8 +32,16 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 
 func (h *Handler) QueryAccount(c *gin.Context) {
 	var req QueryAccountRequest
+	if err := c.ShouldBindUri(&req); err != nil {
+		response.ErrorParam(c, err.Error())
+		return
+	}
 	account, err := h.service.QueryAccount(c, req)
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			response.ErrorNotFound(c)
+			return
+		}
 		if strings.Contains(err.Error(), "duplicate key") {
 			response.ErrorDuplicated(c, err.Error())
 		} else {

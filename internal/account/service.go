@@ -6,6 +6,8 @@ import (
 	"main/common/utils"
 	"sync"
 
+	. "main/model"
+
 	"gorm.io/gorm"
 )
 

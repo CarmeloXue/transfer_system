@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"main/common/log"
+	. "main/model"
 	"time"
 
 	"gorm.io/gorm"
@@ -27,11 +28,11 @@ var (
 )
 
 type TCC interface {
-	Try(ctx context.Context, transactionID, sourceAccountID, destinationAccountID int, amount float64) error
+	Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount float64) error
 
-	Confirm(ctx context.Context, transactionID int) error
+	Confirm(ctx context.Context, transactionID string) error
 
-	Cancel(ctx context.Context, transactionID int) error
+	Cancel(ctx context.Context, transactionID string) error
 }
 
 type tccService struct {
@@ -43,17 +44,17 @@ func NewTCCService(db *gorm.DB) TCC {
 }
 
 // Try will write a payment fund movement, then deduct from source user's amount
-func (s *tccService) Try(ctx context.Context, transactionID, sourceAccountID, destinationAccountID int, amount float64) error {
+func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount float64) error {
 	// check if transaction is already tried
 	repo := NewRepository(s.db)
 	if _, err := repo.GetFundMovement(ctx, FundMovement{
 		TransactionID:    transactionID,
 		FundMovementType: string(Payment),
 	}); err == nil {
-		return ErrTransactionTried
+		return nil
 	} else {
 		if err != gorm.ErrRecordNotFound {
-			return ErrInternalError
+			return err
 		}
 	}
 
@@ -84,15 +85,16 @@ func (s *tccService) Try(ctx context.Context, transactionID, sourceAccountID, de
 
 /**
  * Confirm used to send funds to destination accounts after check fundmovement
- * If had payment_recieved, will just return success to keep idenpotent. 
+ * If had payment_recieved, will just return success to keep idenpotent.
  * If confirm failed, can retry.
  */
-func (s *tccService) Confirm(ctx context.Context, transactionID int) error {
+func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
 	var (
 		err     error
-		payment FundMovement
+		payment *FundMovement
 	)
 	// check if transaction is already tried
+	log.GetLogger().Info(fmt.Sprintf("start confirm transaction %v", transactionID))
 	repo := NewRepository(s.db)
 	if payment, err = repo.GetFundMovement(ctx, FundMovement{
 		TransactionID:    transactionID,
@@ -117,14 +119,19 @@ func (s *tccService) Confirm(ctx context.Context, transactionID int) error {
 	}
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		paymentRecieved := payment
-		paymentRecieved.FundMovementType = string(PaymentReceived)
+		paymentRecieved := &FundMovement{
+			TransactionID:        payment.TransactionID,
+			SourceAccountID:      payment.SourceAccountID,
+			DestinationAccountID: payment.DestinationAccountID,
+			Amount:               payment.Amount,
+			FundMovementType:     string(PaymentReceived),
+		}
 
-		if err = tx.Model(FundMovement{}).Create(&paymentRecieved).Error; err != nil {
+		if err = tx.Model(FundMovement{}).Create(paymentRecieved).Error; err != nil {
 			return ErrFailedToWritePaymentReceived
 		}
 
-		if err = updateAccountBalance(tx, paymentRecieved.DestinationAccountID, paymentRecieved.Amount); err != nil {
+		if err = updateAccountBalance(tx, paymentRecieved.DestinationAccountID, payment.Amount); err != nil {
 			return err
 		}
 
@@ -138,7 +145,7 @@ func (s *tccService) Confirm(ctx context.Context, transactionID int) error {
  * If the fundmovements record is not valie, which means it will be a big bug in this system, need to alert admin to check
  * If the fundmovements looks fine, create a refund fundmovement and add amount in payment back to source acount
  */
-func (s *tccService) Cancel(ctx context.Context, transactionID int) error {
+func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 	fundMvmts, err := NewRepository(s.db).QueryFundMovement(ctx, transactionID)
 	if err != nil {
 		return err
@@ -157,10 +164,16 @@ func (s *tccService) Cancel(ctx context.Context, transactionID int) error {
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		payment := cancelValidators.getPayment()
-		paymentRefund := payment
+		paymentRefund := &FundMovement{
+			TransactionID:        payment.TransactionID,
+			SourceAccountID:      payment.SourceAccountID,
+			DestinationAccountID: payment.DestinationAccountID,
+			Amount:               payment.Amount,
+			FundMovementType:     string(PaymentRefund),
+		}
 		paymentRefund.FundMovementType = string(PaymentRefund)
 		// Create refund fund movement
-		if err := tx.Model(FundMovement{}).Create(&paymentRefund).Error; err != nil {
+		if err := tx.Model(FundMovement{}).Create(paymentRefund).Error; err != nil {
 			return ErrFailedToWritePayment
 		}
 		// add back amount to source account
@@ -194,11 +207,41 @@ func updateAccountBalance(tx *gorm.DB, accountID int, amount float64) error {
 type cancelValidator []FundMovement
 
 func (v cancelValidator) needToCancel() (bool, error) {
+	if len(v) == 0 {
+		return false, nil
+	}
 
-	return true, nil
+	if len(v) == 1 {
+		if v[0].FundMovementType == string(Payment) {
+			return true, nil
+		}
+		log.GetLogger().Error(fmt.Sprintf("invalid fund movement %v \n", v))
+		return false, errors.New("invalid fund movement status.")
+	}
+
+	hasPayment := false
+
+	for _, fm := range v {
+		if fm.FundMovementType == string(Payment) {
+			hasPayment = true
+			break
+		}
+	}
+
+	if hasPayment {
+		return true, nil
+	}
+	log.GetLogger().Error(fmt.Sprintf("invalid fund movement %v \n", v))
+	return false, errors.New("invalid fund movement status.")
 }
 
-func (v cancelValidator) getPayment() FundMovement {
+func (v cancelValidator) getPayment() *FundMovement {
 
-	return FundMovement{}
+	for idx, fm := range v {
+		if fm.FundMovementType == string(Payment) {
+			return &v[idx]
+		}
+	}
+
+	return nil
 }

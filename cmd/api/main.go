@@ -5,6 +5,7 @@ import (
 	"main/common/db"
 	"main/common/log"
 	"main/internal/account"
+	"main/internal/transaction"
 	"net/http"
 	"os"
 	"os/signal"
@@ -34,10 +35,20 @@ func main() {
 	// Initialize Handlers
 	accountHandler := account.NewHandler(accountService)
 
+	transactionDB, err := db.GetTransactionDB()
+	if err != nil {
+		panic("cannot connect to account database")
+	}
+	transactionHandler := transaction.NewHandler(transaction.NewService(transaction.NewRepository(transactionDB), account.NewTCCService(accoundDB)))
+
 	api := r.Group("/api/v1")
 	{
 		api.POST("/accounts", accountHandler.CreateAccount)
-		api.GET("/accounts/:id", accountHandler.QueryAccount)
+		api.GET("/accounts/:account_id", accountHandler.QueryAccount)
+		api.POST("/transactions", transactionHandler.CreateTransaction)
+		api.GET("/transactions/:transaction_id", transactionHandler.QueryTransaction)
+		api.POST("/transactions/retry", transactionHandler.RetryTransaction)
+
 	}
 
 	srv := &http.Server{

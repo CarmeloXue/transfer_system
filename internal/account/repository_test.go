@@ -2,31 +2,22 @@ package account
 
 import (
 	"context"
+	"main/common/db/testutils"
+	"main/model"
 	"testing"
 
+	. "main/model"
+
 	"github.com/stretchr/testify/assert"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-func setupTestDB() (*gorm.DB, error) {
-	// Use an in-memory SQLite database
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		return nil, err
-	}
-
-	// Auto migrate the Account struct to create the schema
-	db.AutoMigrate(&Account{})
-
-	return db, nil
-}
-
 func prepareRepo() (AccountRepository, error) {
-	db, err := setupTestDB()
+	db, err := testutils.SetupTestDB()
 	if err != nil {
 		return nil, err
 	}
+	db.AutoMigrate(model.Account{})
 	return &repository{db}, nil
 }
 
@@ -51,12 +42,11 @@ func TestGetAccount(t *testing.T) {
 	repo, err := prepareRepo()
 	assert.NoError(t, err, "failed to test")
 
-	// Your test logic here
 	account := &Account{AccountID: 123, Balance: 100.0}
 
 	err = repo.CreateAccount(context.Background(), account)
 	assert.NoError(t, err, "failed to create account")
-	acc, err := repo.GetAccountByID(context.Background(), 1)
+	acc, err := repo.GetAccountByID(context.Background(), 123)
 	assert.NoError(t, err, "failed to create account")
 
 	assert.Equal(t, 123, acc.AccountID)
