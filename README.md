@@ -36,7 +36,7 @@ I have two separate databases here, one for AccountService and one for Transacti
 
 ```
  - Methods: Get
- - URL: /api/v1/account/{account_id}
+ - URL: /api/v1/accounts/{account_id}
  - Response: 
  {
     "success": bool,
@@ -53,7 +53,7 @@ I have two separate databases here, one for AccountService and one for Transacti
 
 ```
  - Methods: Post
- - URL: /api/v1/account
+ - URL: /api/v1/accounts
  - Request body: 
  {
     "account_id": uint64,

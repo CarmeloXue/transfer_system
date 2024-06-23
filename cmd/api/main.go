@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
+	"main/common/db"
 	"main/common/log"
-	"main/handlers"
+	"main/internal/account"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,9 +25,20 @@ func main() {
 
 	logger := log.GetLogger()
 	logger.Info("Server started")
+	accoundDB, err := db.GetAccountDBClient()
+	if err != nil {
+		panic("cannot connect to account database")
+	}
+	accountService := account.NewService(accoundDB)
 
-	handlers.RegisterAccountHanders(r)
-	handlers.RegisterTransactionHandlers(r)
+	// Initialize Handlers
+	accountHandler := account.NewHandler(accountService)
+
+	api := r.Group("/api/v1")
+	{
+		api.POST("/accounts", accountHandler.CreateAccount)
+		api.GET("/accounts/:id", accountHandler.QueryAccount)
+	}
 
 	srv := &http.Server{
 		Addr:    ":8080",

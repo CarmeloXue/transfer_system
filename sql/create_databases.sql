@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS account_tab (
 CREATE TABLE IF NOT EXISTS fund_movement_tab (
     id SERIAL PRIMARY KEY,
     transaction_id INT NOT NULL,
-    direction VARCHAR(20) NOT NULL,
+    fund_movement_type VARCHAR(20) NOT NULL,
     source_account_id INT NOT NULL,
     destination_account_id INT NOT NULL,
     amount DECIMAL(20, 8) NOT NULL,

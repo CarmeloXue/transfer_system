@@ -2,6 +2,7 @@ package log
 
 import (
 	"os"
+	"path/filepath"
 	"sync"
 
 	"go.uber.org/zap"
@@ -14,22 +15,25 @@ var (
 	infoFile   *os.File
 	errorFile  *os.File
 	initLogger = initZapLogger
+
+	logDir   = "/var/log/api"
+	infoLog  = "info.log"
+	errorLog = "error.log"
 )
 
 func initZapLogger() {
-
 	var (
 		err error
 	)
-	infoFile, err = os.OpenFile("logs/info.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		panic(err)
+	if _, err = os.Stat(logDir); os.IsNotExist(err) {
+		os.MkdirAll(logDir, os.ModePerm)
 	}
 
-	errorFile, err = os.OpenFile("logs/error.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		panic(err)
-	}
+	infoLogPath := filepath.Join(logDir, infoLog)
+	errorLogPath := filepath.Join(logDir, errorLog)
+
+	infoFile, _ := os.OpenFile(infoLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	errorFile, _ := os.OpenFile(errorLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
 	infoWriteSyncer := zapcore.AddSync(infoFile)
 	errorWriteSyncer := zapcore.AddSync(errorFile)

@@ -1,6 +1,7 @@
 package account
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,10 +38,10 @@ func TestCreateAccount(t *testing.T) {
 	// Your test logic here
 	account := &Account{AccountID: 1, Balance: 100.0}
 
-	err = repo.CreateAccount(account)
+	err = repo.CreateAccount(context.Background(), account)
 	assert.NoError(t, err, "failed to create account")
 
-	count, err := repo.(*repository).countAccount()
+	count, err := repo.(*repository).countAccount(context.Background())
 	assert.NoError(t, err, "failed to create account")
 
 	assert.Equal(t, int64(1), count)
@@ -53,9 +54,9 @@ func TestGetAccount(t *testing.T) {
 	// Your test logic here
 	account := &Account{AccountID: 123, Balance: 100.0}
 
-	err = repo.CreateAccount(account)
+	err = repo.CreateAccount(context.Background(), account)
 	assert.NoError(t, err, "failed to create account")
-	acc, err := repo.GetAccountByID(1)
+	acc, err := repo.GetAccountByID(context.Background(), 1)
 	assert.NoError(t, err, "failed to create account")
 
 	assert.Equal(t, 123, acc.AccountID)
@@ -66,7 +67,7 @@ func TestGetAccount_NoData(t *testing.T) {
 	repo, err := prepareRepo()
 	assert.NoError(t, err, "failed to test")
 
-	_, err = repo.GetAccountByID(1)
+	_, err = repo.GetAccountByID(context.Background(), 1)
 	assert.Error(t, err, "failed to create account")
 	assert.EqualError(t, gorm.ErrRecordNotFound, err.Error())
 }

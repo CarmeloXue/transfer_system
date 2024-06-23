@@ -35,6 +35,13 @@ func ErrorServer(c *gin.Context) {
 	})
 }
 
+func ErrorDuplicated(c *gin.Context, message string) {
+	c.JSON(http.StatusConflict, gin.H{
+		"message": "server error",
+		"data":    "",
+	})
+}
+
 func ErrorServerWithErrorMessage(c *gin.Context, err error) {
 	c.JSON(http.StatusInternalServerError, gin.H{
 		"message": fmt.Sprintf("server error: %v", err.Error()),

@@ -13,7 +13,7 @@ services:
 
   api_server:
     build:
-      context: ./api_server
+      context: .
       dockerfile: Dockerfile
     container_name: api_server
     expose:
@@ -24,7 +24,10 @@ services:
       - DATABASE_PASSWORD=example
       - DATABASE_PORT=5432
     volumes:
-      - ./logs:/root/logs  # Mount a local directory for logs
+      - ./logs:/var/log/api
+    depends_on:
+      db:
+        condition: service_healthy
 
   db:
     image: postgres:latest
@@ -33,6 +36,11 @@ services:
       POSTGRES_DB: mydb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: example
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     volumes:
       - ./sql/create_databases.sql:/docker-entrypoint-initdb.d/create_databases.sql
       - db_data:/var/lib/postgresql/data
