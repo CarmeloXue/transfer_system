@@ -3,7 +3,7 @@ package db
 import (
 	"errors"
 	"fmt"
-	"log"
+	"main/common/log"
 	"os"
 	"sync"
 
@@ -36,7 +36,7 @@ func GetAccountDBClient() (*gorm.DB, error) {
 		var err error
 		accountDB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 		if err != nil {
-			log.Fatalf("failed to connect database: %v", err)
+			log.GetLogger().Sugar().Infof("failed to connect database: %v", err)
 		}
 	})
 	if accountDB == nil {
@@ -58,7 +58,7 @@ func GetTransactionDB() (*gorm.DB, error) {
 		var err error
 		transactionDB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 		if err != nil {
-			log.Fatalf("failed to connect database: %v", err)
+			log.GetLogger().Sugar().Infof("failed to connect database: %v", err)
 		}
 	})
 	if transactionDB == nil {

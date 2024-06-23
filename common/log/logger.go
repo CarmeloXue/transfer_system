@@ -71,6 +71,14 @@ func GetLogger() *zap.Logger {
 	return logger
 }
 
+func GetSugger() *zap.SugaredLogger {
+
+	if logger == nil {
+		Init()
+	}
+	return logger.Sugar()
+}
+
 // Cleanup closes the log files and syncs the logger.
 func Cleanup() {
 	if logger != nil {

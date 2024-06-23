@@ -3,7 +3,6 @@ package transaction
 import (
 	"context"
 	"errors"
-	"fmt"
 	"main/common/log"
 	"main/common/utils"
 	"main/internal/account"
@@ -100,7 +99,7 @@ func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequ
 func (s *service) processTransaction(ctx context.Context, transactionID string) (<-chan model.Transaction, error) {
 	tx, err := s.repo.GetTransactionByID(ctx, transactionID)
 	if err != nil {
-		log.GetLogger().Error(fmt.Sprintf("Failed to find transaction: %v", err))
+		log.GetSugger().Error("Failed to find transaction", "err", err)
 		return nil, err
 	}
 	transactionChan := make(chan model.Transaction)
@@ -115,7 +114,6 @@ func (s *service) processTransaction(ctx context.Context, transactionID string) 
 		}()
 		err = s.accountTCC.Try(ctx, tx.TransactionID, tx.SourceAccountID, tx.DestinationAccountID, tx.Amount)
 		tx.Retries = MaxRetry
-		log.GetLogger().Info(fmt.Sprintf("Try, err %v", err))
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				s.retryCancel(ctx, &tx)

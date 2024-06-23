@@ -45,6 +45,7 @@ func NewTCCService(db *gorm.DB) TCC {
 
 // Try will write a payment fund movement, then deduct from source user's amount
 func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount float64) error {
+	logger := log.GetSugger()
 	// check if transaction is already tried
 	repo := NewRepository(s.db)
 	if _, err := repo.GetFundMovement(ctx, FundMovement{
@@ -71,14 +72,16 @@ func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccoun
 		}
 		// Create deduct fund movement
 		if err := tx.Model(FundMovement{}).Create(&payment).Error; err != nil {
+			logger.Error("failed to create payment FM", "err", err)
 			return ErrFailedToWritePayment
 		}
 
 		if err := updateAccountBalance(tx, sourceAccountID, -amount); err != nil {
+			logger.Error("failed to update balance", "err", err)
 			return err
 		}
 
-		log.GetLogger().Info(fmt.Sprintf("try transaction success. transaction: %v amount: %v\n", transactionID, amount))
+		logger.Info("try transaction success", "transactionID", transactionID, "amount", amount)
 		return nil
 	})
 }
@@ -90,15 +93,18 @@ func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccoun
  */
 func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
 	var (
-		err error
+		err    error
+		logger = log.GetSugger()
 	)
 	validator, err := s.getFundMovementValidator(ctx, transactionID)
 	if err != nil {
+		logger.Error("failed to get fm validator", "err", err)
 		return err
 	}
 	isFinal, err := validator.isTransactionFinal()
 	// TODO: Need to send alert to trigger manual check
 	if err != nil {
+		logger.Error("suspicious fund movemnet transaction", "err", err, "transaction", transactionID)
 		return err
 	}
 

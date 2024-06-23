@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"main/common/db"
 	"main/common/log"
 	"main/internal/account"
@@ -59,7 +58,7 @@ func main() {
 	// Start the server in a goroutine
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error(fmt.Sprintf("listen: %s\n", err))
+			logger.Sugar().Error("listen", "err", err)
 		}
 	}()
 	logger.Info("Server started on :8080")
