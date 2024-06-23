@@ -9,10 +9,13 @@ import (
 	"main/internal/account"
 	"main/model"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 const (
-	DefaultCreateTransactionTimeoutSeconds = 10
+	DefaultCreateTransactionTimeoutSeconds = 3
+	MaxRetry                               = 5
 )
 
 var (
@@ -52,15 +55,27 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 		TransactionID:        utils.GenerateTransactionID(),
 		Status:               string(model.Pending),
 	}
-
-	err = s.repo.CreateTransaction(ctx, trx)
+	tCtx, cancel := context.WithTimeout(ctx, time.Second*DefaultCreateTransactionTimeoutSeconds)
+	defer cancel()
+	err = s.repo.CreateTransaction(tCtx, trx)
 	if err != nil {
 		return model.Transaction{}, err
 	}
 
-	go s.processTransaction(ctx, trx.TransactionID)
-
+	trxChan, err := s.processTransaction(tCtx, trx.TransactionID)
+	if err != nil {
+		return model.Transaction{}, err
+	}
+	select {
+	case tx, ok := <-trxChan:
+		if ok {
+			return tx, nil
+		}
+	case <-tCtx.Done():
+		return trx, nil
+	}
 	return trx, nil
+
 }
 
 func (s *service) QueryTransaction(ctx context.Context, req QueryTransactionRequest) (model.Transaction, error) {
@@ -82,28 +97,40 @@ func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequ
 	return s.repo.GetTransactionByID(ctx, req.TransactionID)
 }
 
-func (s *service) processTransaction(ctx context.Context, transactionID string) {
+func (s *service) processTransaction(ctx context.Context, transactionID string) (<-chan model.Transaction, error) {
+
 	tx, err := s.repo.GetTransactionByID(ctx, transactionID)
 	if err != nil {
 		log.GetLogger().Error(fmt.Sprintf("Failed to find transaction: %v", err))
-		return
+		return nil, err
 	}
+	transactionChan := make(chan model.Transaction)
 
-	txCtx, cancel := context.WithTimeout(ctx, time.Second*DefaultCreateTransactionTimeoutSeconds)
-	defer cancel()
-	err = s.accountTCC.Try(txCtx, tx.TransactionID, tx.SourceAccountID, tx.DestinationAccountID, tx.Amount)
-	log.GetLogger().Info(fmt.Sprintf("Try, err %v", err))
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			s.retryCancel(txCtx, &tx)
-		} else {
-			s.updateStatus(ctx, tx.TransactionID, model.Failed)
+	go func() {
+		defer close(transactionChan)
+		defer func() {
+			tx, err := s.repo.GetTransactionByID(ctx, transactionID)
+			if err == nil {
+				transactionChan <- tx
+			}
+		}()
+		err = s.accountTCC.Try(ctx, tx.TransactionID, tx.SourceAccountID, tx.DestinationAccountID, tx.Amount)
+		tx.Retries = MaxRetry
+		log.GetLogger().Info(fmt.Sprintf("Try, err %v", err))
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				s.retryCancel(ctx, &tx)
+			} else {
+				s.updateStatus(ctx, tx.TransactionID, model.Failed)
+			}
+			return
 		}
-		return
-	}
-
-	s.updateStatus(ctx, tx.TransactionID, model.Processing)
-	s.retryConfirm(ctx, &tx)
+		if tx.Status == string(model.Pending) {
+			s.updateStatus(ctx, tx.TransactionID, model.Processing)
+		}
+		s.retryConfirm(ctx, &tx)
+	}()
+	return transactionChan, err
 }
 
 func (s *service) retryCancel(ctx context.Context, tx *model.Transaction) {
@@ -119,6 +146,7 @@ func (s *service) retryCancel(ctx context.Context, tx *model.Transaction) {
 }
 
 func (s *service) retryConfirm(ctx context.Context, tx *model.Transaction) {
+	log.GetLogger().With(zap.Any("transaction", tx)).Info("prepare to confirm")
 	for i := 0; i < tx.Retries; i++ {
 		err := s.accountTCC.Confirm(ctx, tx.TransactionID)
 		if err == nil {
