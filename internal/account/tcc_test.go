@@ -69,10 +69,10 @@ func (s *tccSuite) Test_Try_Happyflow() {
 
 	fm, err := s.repository.GetFundMovement(ctx, FundMovement{
 		TransactionID:    trx.TransactionID,
-		FundMovementType: string(Payment),
+		FundMovementType: string(FMPayment),
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(*fm, trx, Payment)
+	s.validateFundMovement(fm, trx, FMPayment)
 }
 
 func (s *tccSuite) Test_Try_Insufficient_Should_ReturnError() {
@@ -103,7 +103,7 @@ func (s *tccSuite) Test_Try_Insufficient_Should_ReturnError() {
 	assert.EqualError(s.T(), ErrInsufficientBalance, err.Error())
 }
 
-func (s *tccSuite) Test_Try_MultipleCAll_Should_OnlyProceedOnce_ReturnOK() {
+func (s *tccSuite) Test_Try_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
 	var (
 		accounts = []Account{
 			{
@@ -133,6 +133,108 @@ func (s *tccSuite) Test_Try_MultipleCAll_Should_OnlyProceedOnce_ReturnOK() {
 
 	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
 	assert.NoError(s.T(), err)
+}
+
+func (s *tccSuite) Test_Confirm_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
+	var (
+		accounts = []Account{
+			{
+				AccountID: 1,
+				Balance:   100.0,
+			},
+			{
+				AccountID: 2,
+				Balance:   100.0,
+			},
+		}
+		tcc = NewTCCService(s.mockDB)
+		ctx = context.Background()
+		trx = Transaction{
+			TransactionID:        "123",
+			SourceAccountID:      1,
+			DestinationAccountID: 2,
+			Amount:               100.0,
+		}
+		err error
+	)
+
+	s.prepareAccounts(accounts)
+
+	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
+	assert.NoError(s.T(), err)
+
+	err = tcc.Confirm(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+	err = tcc.Confirm(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+	err = tcc.Confirm(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+	err = tcc.Confirm(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+
+	accounts = []Account{
+		{
+			AccountID: 1,
+			Balance:   0,
+		},
+		{
+			AccountID: 2,
+			Balance:   200.0,
+		},
+	}
+
+	s.validateAccounts(ctx, accounts)
+}
+
+func (s *tccSuite) Test_Cancel_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
+	var (
+		accounts = []Account{
+			{
+				AccountID: 1,
+				Balance:   100.0,
+			},
+			{
+				AccountID: 2,
+				Balance:   100.0,
+			},
+		}
+		tcc = NewTCCService(s.mockDB)
+		ctx = context.Background()
+		trx = Transaction{
+			TransactionID:        "123",
+			SourceAccountID:      1,
+			DestinationAccountID: 2,
+			Amount:               100.0,
+		}
+		err error
+	)
+
+	s.prepareAccounts(accounts)
+
+	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
+	assert.NoError(s.T(), err)
+
+	err = tcc.Cancel(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+	err = tcc.Cancel(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+	err = tcc.Cancel(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+	err = tcc.Cancel(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+
+	accounts = []Account{
+		{
+			AccountID: 1,
+			Balance:   100,
+		},
+		{
+			AccountID: 2,
+			Balance:   100.0,
+		},
+	}
+
+	s.validateAccounts(ctx, accounts)
 }
 
 func (s *tccSuite) Test_TryConfirm_HappyFlow() {
@@ -166,17 +268,17 @@ func (s *tccSuite) Test_TryConfirm_HappyFlow() {
 
 	payment, err := s.repository.GetFundMovement(ctx, FundMovement{
 		TransactionID:    trx.TransactionID,
-		FundMovementType: string(Payment),
+		FundMovementType: string(FMPayment),
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(*payment, trx, Payment)
+	s.validateFundMovement(payment, trx, FMPayment)
 
 	paymentRecieved, err := s.repository.GetFundMovement(ctx, FundMovement{
 		TransactionID:    trx.TransactionID,
-		FundMovementType: string(PaymentReceived),
+		FundMovementType: string(FMPaymentReceived),
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(*paymentRecieved, trx, PaymentReceived)
+	s.validateFundMovement(paymentRecieved, trx, FMPaymentReceived)
 
 	expectedAccs := []Account{
 		{
@@ -222,17 +324,17 @@ func (s *tccSuite) Test_TryCancel_HappyFlow() {
 
 	payment, err := s.repository.GetFundMovement(ctx, FundMovement{
 		TransactionID:    trx.TransactionID,
-		FundMovementType: string(Payment),
+		FundMovementType: string(FMPayment),
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(*payment, trx, Payment)
+	s.validateFundMovement(payment, trx, FMPayment)
 
 	refund, err := s.repository.GetFundMovement(ctx, FundMovement{
 		TransactionID:    trx.TransactionID,
-		FundMovementType: string(PaymentRefund),
+		FundMovementType: string(FMPaymentRefund),
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(*refund, trx, PaymentRefund)
+	s.validateFundMovement(refund, trx, FMPaymentRefund)
 	expectedAccs := []Account{
 		{
 			AccountID: 1,
@@ -275,7 +377,62 @@ func (s *tccSuite) Test_EmptyCancel_ShouldSuccess() {
 	s.validateAccounts(ctx, accounts)
 }
 
-func (s *tccSuite) validateFundMovement(fm FundMovement, trx Transaction, fmType FundMovementType) {
+func (s *tccSuite) Test_Try_Cancel_Confirm() {
+	var (
+		accounts = []Account{
+			{
+				AccountID: 1,
+				Balance:   100.0,
+			},
+			{
+				AccountID: 2,
+				Balance:   100.0,
+			},
+		}
+		tcc = NewTCCService(s.mockDB)
+		ctx = context.Background()
+		trx = Transaction{
+			TransactionID:        "123",
+			SourceAccountID:      1,
+			DestinationAccountID: 2,
+			Amount:               100.0,
+		}
+		err error
+	)
+	s.prepareAccounts(accounts)
+
+	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
+	assert.NoError(s.T(), err)
+	err = tcc.Cancel(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+	err = tcc.Confirm(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+
+	payment, err := s.repository.GetFundMovement(ctx, FundMovement{
+		TransactionID:    trx.TransactionID,
+		FundMovementType: string(FMPayment),
+	})
+	assert.NoError(s.T(), err)
+	s.validateFundMovement(payment, trx, FMPayment)
+
+	refund, err := s.repository.GetFundMovement(ctx, FundMovement{
+		TransactionID:    trx.TransactionID,
+		FundMovementType: string(FMPaymentRefund),
+	})
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), refund)
+	s.validateFundMovement(refund, trx, FMPaymentRefund)
+
+	_, err = s.repository.GetFundMovement(ctx, FundMovement{
+		TransactionID:    trx.TransactionID,
+		FundMovementType: string(FMPaymentReceived),
+	})
+	assert.EqualError(s.T(), gorm.ErrRecordNotFound, err.Error())
+
+	s.validateAccounts(ctx, accounts)
+}
+
+func (s *tccSuite) validateFundMovement(fm *FundMovement, trx Transaction, fmType FundMovementType) {
 	assert.Equal(s.T(), trx.TransactionID, fm.TransactionID)
 	assert.Equal(s.T(), trx.SourceAccountID, fm.SourceAccountID)
 	assert.Equal(s.T(), trx.Amount, fm.Amount)

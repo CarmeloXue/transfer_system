@@ -5,14 +5,14 @@ import "time"
 type FundMovementType string
 
 var (
-	Payment         FundMovementType = "Payment"
-	PaymentReceived FundMovementType = "PaymentReceived"
-	PaymentRefund   FundMovementType = "PaymentRefund" // This is used to refund a payment in cancel.
+	FMPayment         FundMovementType = "Payment"
+	FMPaymentReceived FundMovementType = "PaymentReceived"
+	FMPaymentRefund   FundMovementType = "PaymentRefund" // This is used to refund a payment in cancel.
 )
 
 type FundMovement struct {
 	ID                   int       `gorm:"primaryKey;column:id" json:"id"`
-	TransactionID        string       `gorm:"column:transaction_id" json:"transaction_id"`
+	TransactionID        string    `gorm:"column:transaction_id" json:"transaction_id"`
 	FundMovementType     string    `gorm:"column:fund_movement_type" json:"fund_movement_type"`
 	SourceAccountID      int       `gorm:"column:source_account_id" json:"source_account_id"`
 	DestinationAccountID int       `gorm:"column:destination_account_id" json:"destination_account_id"`

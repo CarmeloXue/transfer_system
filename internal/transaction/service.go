@@ -98,7 +98,6 @@ func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequ
 }
 
 func (s *service) processTransaction(ctx context.Context, transactionID string) (<-chan model.Transaction, error) {
-
 	tx, err := s.repo.GetTransactionByID(ctx, transactionID)
 	if err != nil {
 		log.GetLogger().Error(fmt.Sprintf("Failed to find transaction: %v", err))
