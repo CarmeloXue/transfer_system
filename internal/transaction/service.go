@@ -30,12 +30,13 @@ type Service interface {
 }
 
 type service struct {
-	repo       Repository
-	accountTCC account.TCC
+	repo        Repository
+	accountTCC  account.TCC
+	accountRepo account.AccountRepository
 }
 
-func NewService(repo Repository, accountTCC account.TCC) Service {
-	return &service{repo: repo, accountTCC: accountTCC}
+func NewService(repo Repository, accountTCC account.TCC, accountRepo account.AccountRepository) Service {
+	return &service{repo: repo, accountTCC: accountTCC, accountRepo: accountRepo}
 }
 
 func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRequest) (model.Transaction, error) {
@@ -45,6 +46,14 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 	float64Value, err := utils.ParseFloat64String(req.Amount)
 	if err != nil {
 		return model.Transaction{}, err
+	}
+
+	if _, err := s.accountRepo.GetAccountByID(ctx, req.SourceAccountID); err != nil {
+		return model.Transaction{}, errors.New("invalid sender")
+	}
+
+	if _, err := s.accountRepo.GetAccountByID(ctx, req.DestinationAccountID); err != nil {
+		return model.Transaction{}, errors.New("invalid reciever")
 	}
 
 	trx := model.Transaction{
@@ -62,19 +71,16 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 	}
 
 	trxChan, err := s.processTransaction(tCtx, trx.TransactionID)
-	if err != nil {
-		return model.Transaction{}, err
-	}
+
 	select {
 	case tx, ok := <-trxChan:
 		if ok {
-			return tx, nil
+			return tx, err
 		}
 	case <-tCtx.Done():
-		return trx, nil
+		return trx, err
 	}
-	return trx, nil
-
+	return trx, err
 }
 
 func (s *service) QueryTransaction(ctx context.Context, req QueryTransactionRequest) (model.Transaction, error) {
@@ -87,13 +93,24 @@ func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequ
 	if err != nil {
 		return model.Transaction{}, err
 	}
+	tCtx, cancel := context.WithTimeout(ctx, time.Second*DefaultCreateTransactionTimeoutSeconds)
+	defer cancel()
 	// Start from try
 	if tx.Status == string(model.Pending) || tx.Status == string(model.Processing) {
-		go s.processTransaction(ctx, tx.TransactionID)
+		trxChan, err := s.processTransaction(tCtx, tx.TransactionID)
+
+		select {
+		case tx, ok := <-trxChan:
+			if ok {
+				return tx, err
+			}
+		case <-tCtx.Done():
+			return tx, nil
+		}
+		return tx, nil
 	}
 
-	time.Sleep(time.Second * 1)
-	return s.repo.GetTransactionByID(ctx, req.TransactionID)
+	return tx, nil
 }
 
 func (s *service) processTransaction(ctx context.Context, transactionID string) (<-chan model.Transaction, error) {
@@ -102,8 +119,9 @@ func (s *service) processTransaction(ctx context.Context, transactionID string) 
 		log.GetSugger().Error("Failed to find transaction", "err", err)
 		return nil, err
 	}
-	transactionChan := make(chan model.Transaction)
 
+	err = s.accountTCC.Try(ctx, tx.TransactionID, tx.SourceAccountID, tx.DestinationAccountID, tx.Amount)
+	transactionChan := make(chan model.Transaction)
 	go func() {
 		defer close(transactionChan)
 		defer func() {
@@ -112,7 +130,6 @@ func (s *service) processTransaction(ctx context.Context, transactionID string) 
 				transactionChan <- tx
 			}
 		}()
-		err = s.accountTCC.Try(ctx, tx.TransactionID, tx.SourceAccountID, tx.DestinationAccountID, tx.Amount)
 		tx.Retries = MaxRetry
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
@@ -127,6 +144,7 @@ func (s *service) processTransaction(ctx context.Context, transactionID string) 
 		}
 		s.retryConfirm(ctx, &tx)
 	}()
+
 	return transactionChan, err
 }
 

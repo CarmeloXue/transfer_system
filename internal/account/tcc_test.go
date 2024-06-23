@@ -44,11 +44,11 @@ func (s *tccSuite) Test_Try_Happyflow() {
 	var (
 		accounts = []Account{
 			{
-				AccountID: 1,
+				AccountID: 10,
 				Balance:   100.0,
 			},
 			{
-				AccountID: 2,
+				AccountID: 29,
 				Balance:   100.0,
 			},
 		}
@@ -56,8 +56,8 @@ func (s *tccSuite) Test_Try_Happyflow() {
 		ctx = context.Background()
 		trx = Transaction{
 			TransactionID:        "123",
-			SourceAccountID:      1,
-			DestinationAccountID: 2,
+			SourceAccountID:      10,
+			DestinationAccountID: 29,
 			Amount:               100.0,
 		}
 		err error
@@ -68,11 +68,10 @@ func (s *tccSuite) Test_Try_Happyflow() {
 	assert.NoError(s.T(), err)
 
 	fm, err := s.repository.GetFundMovement(ctx, FundMovement{
-		TransactionID:    trx.TransactionID,
-		FundMovementType: string(FMPayment),
+		TransactionID: trx.TransactionID,
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(fm, trx, FMPayment)
+	s.validateFundMovement(fm, trx, FMStageSourceOnHold)
 }
 
 func (s *tccSuite) Test_Try_Insufficient_Should_ReturnError() {
@@ -266,19 +265,11 @@ func (s *tccSuite) Test_TryConfirm_HappyFlow() {
 	err = tcc.Confirm(ctx, trx.TransactionID)
 	assert.NoError(s.T(), err)
 
-	payment, err := s.repository.GetFundMovement(ctx, FundMovement{
-		TransactionID:    trx.TransactionID,
-		FundMovementType: string(FMPayment),
+	fm, err := s.repository.GetFundMovement(ctx, FundMovement{
+		TransactionID: trx.TransactionID,
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(payment, trx, FMPayment)
-
-	paymentRecieved, err := s.repository.GetFundMovement(ctx, FundMovement{
-		TransactionID:    trx.TransactionID,
-		FundMovementType: string(FMPaymentReceived),
-	})
-	assert.NoError(s.T(), err)
-	s.validateFundMovement(paymentRecieved, trx, FMPaymentReceived)
+	s.validateFundMovement(fm, trx, FMStageDestConfirmd)
 
 	expectedAccs := []Account{
 		{
@@ -322,19 +313,11 @@ func (s *tccSuite) Test_TryCancel_HappyFlow() {
 	err = tcc.Cancel(ctx, trx.TransactionID)
 	assert.NoError(s.T(), err)
 
-	payment, err := s.repository.GetFundMovement(ctx, FundMovement{
-		TransactionID:    trx.TransactionID,
-		FundMovementType: string(FMPayment),
+	rollback, err := s.repository.GetFundMovement(ctx, FundMovement{
+		TransactionID: trx.TransactionID,
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(payment, trx, FMPayment)
-
-	refund, err := s.repository.GetFundMovement(ctx, FundMovement{
-		TransactionID:    trx.TransactionID,
-		FundMovementType: string(FMPaymentRefund),
-	})
-	assert.NoError(s.T(), err)
-	s.validateFundMovement(refund, trx, FMPaymentRefund)
+	s.validateFundMovement(rollback, trx, FMStageRollbacked)
 	expectedAccs := []Account{
 		{
 			AccountID: 1,
@@ -373,6 +356,12 @@ func (s *tccSuite) Test_EmptyCancel_ShouldSuccess() {
 	s.prepareAccounts(accounts)
 	err = tcc.Cancel(ctx, trx.TransactionID)
 	assert.NoError(s.T(), err)
+	rollback, err := s.repository.GetFundMovement(ctx, FundMovement{
+		TransactionID: trx.TransactionID,
+	})
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), float64(0), rollback.Amount)
+	assert.Equal(s.T(), FMStageRollbacked, rollback.Stage)
 
 	s.validateAccounts(ctx, accounts)
 }
@@ -406,37 +395,23 @@ func (s *tccSuite) Test_Try_Cancel_Confirm() {
 	err = tcc.Cancel(ctx, trx.TransactionID)
 	assert.NoError(s.T(), err)
 	err = tcc.Confirm(ctx, trx.TransactionID)
-	assert.NoError(s.T(), err)
-
-	payment, err := s.repository.GetFundMovement(ctx, FundMovement{
-		TransactionID:    trx.TransactionID,
-		FundMovementType: string(FMPayment),
-	})
-	assert.NoError(s.T(), err)
-	s.validateFundMovement(payment, trx, FMPayment)
+	assert.EqualError(s.T(), ErrRollbacked, err.Error())
 
 	refund, err := s.repository.GetFundMovement(ctx, FundMovement{
-		TransactionID:    trx.TransactionID,
-		FundMovementType: string(FMPaymentRefund),
+		TransactionID: trx.TransactionID,
 	})
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), refund)
-	s.validateFundMovement(refund, trx, FMPaymentRefund)
-
-	_, err = s.repository.GetFundMovement(ctx, FundMovement{
-		TransactionID:    trx.TransactionID,
-		FundMovementType: string(FMPaymentReceived),
-	})
-	assert.EqualError(s.T(), gorm.ErrRecordNotFound, err.Error())
+	s.validateFundMovement(refund, trx, FMStageRollbacked)
 
 	s.validateAccounts(ctx, accounts)
 }
 
-func (s *tccSuite) validateFundMovement(fm *FundMovement, trx Transaction, fmType FundMovementType) {
+func (s *tccSuite) validateFundMovement(fm *FundMovement, trx Transaction, stage FundMovementStage) {
 	assert.Equal(s.T(), trx.TransactionID, fm.TransactionID)
 	assert.Equal(s.T(), trx.SourceAccountID, fm.SourceAccountID)
 	assert.Equal(s.T(), trx.Amount, fm.Amount)
-	assert.Equal(s.T(), fm.FundMovementType, string(fmType))
+	assert.Equal(s.T(), stage, fm.Stage)
 }
 
 func (s *tccSuite) validateAccounts(ctx context.Context, expectAccountStatus []Account) {

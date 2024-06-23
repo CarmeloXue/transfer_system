@@ -38,7 +38,7 @@ func main() {
 	if err != nil {
 		panic("cannot connect to account database")
 	}
-	transactionHandler := transaction.NewHandler(transaction.NewService(transaction.NewRepository(transactionDB), account.NewTCCService(accoundDB)))
+	transactionHandler := transaction.NewHandler(transaction.NewService(transaction.NewRepository(transactionDB), account.NewTCCService(accoundDB), account.NewRepository(accoundDB)))
 
 	api := r.Group("/api/v1")
 	{

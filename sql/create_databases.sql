@@ -19,14 +19,13 @@ CREATE TABLE IF NOT EXISTS account_tab (
 
 CREATE TABLE IF NOT EXISTS fund_movement_tab (
     id SERIAL PRIMARY KEY,
-    transaction_id CHAR(36) NOT NULL,
-    fund_movement_type VARCHAR(20) NOT NULL,
+    transaction_id CHAR(36) UNIQUE NOT NULL,
+    stage INT NOT NULL,
     source_account_id INT NOT NULL,
     destination_account_id INT NOT NULL,
     amount DECIMAL(20, 8) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (transaction_id, fund_movement_type)
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 

@@ -24,7 +24,10 @@ var (
 	ErrTransactionTried              = errors.New("transaction already tried")
 	ErrInternalError                 = errors.New("internal error")
 	ErrPaymentNotDone                = errors.New("payment not done")
-	ErrFailedToWritePaymentReceived  = errors.New("failed to write payment received")
+	ErrFMFailedToMoveDestConfirmed   = errors.New("failed to move confirmed")
+	ErrRollbacked                    = errors.New("rollbacked")
+	ErrConfirmed                     = errors.New("confirmed")
+	ErrFailedToRollback              = errors.New("failed to rollback")
 )
 
 type TCC interface {
@@ -45,12 +48,23 @@ func NewTCCService(db *gorm.DB) TCC {
 
 // Try will write a payment fund movement, then deduct from source user's amount
 func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount float64) error {
-	logger := log.GetSugger()
-	// check if transaction is already tried
-	repo := NewRepository(s.db)
+	var (
+		logger = log.GetSugger()
+		// check if transaction is already tried
+		repo = NewRepository(s.db)
+	)
+
+	// TODO use goroutine. Currently met a issue in mock db connection in test
+	if _, err := repo.GetAccountByID(ctx, sourceAccountID); err != nil {
+		return errors.New("invalid sender")
+	}
+
+	if _, err := repo.GetAccountByID(ctx, destinationAccountID); err != nil {
+		return errors.New("invalid reciever")
+	}
+
 	if _, err := repo.GetFundMovement(ctx, FundMovement{
-		TransactionID:    transactionID,
-		FundMovementType: string(FMPayment),
+		TransactionID: transactionID,
 	}); err == nil {
 		return nil
 	} else {
@@ -63,16 +77,18 @@ func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccoun
 	defer cancel()
 
 	return s.db.WithContext(txCtx).Transaction(func(tx *gorm.DB) error {
-		payment := FundMovement{
+		sourceOnHold := FundMovement{
 			TransactionID:        transactionID,
 			SourceAccountID:      sourceAccountID,
 			DestinationAccountID: destinationAccountID,
 			Amount:               amount,
-			FundMovementType:     string(FMPayment),
+			Stage:                FMStageSourceOnHold,
 		}
 		// Create deduct fund movement
-		if err := tx.Model(FundMovement{}).Create(&payment).Error; err != nil {
-			logger.Error("failed to create payment FM", "err", err)
+		if err := tx.Model(FundMovement{}).Create(&sourceOnHold).Error; err != nil {
+			if err == gorm.ErrDuplicatedKey {
+				return nil
+			}
 			return ErrFailedToWritePayment
 		}
 
@@ -96,52 +112,33 @@ func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
 		err    error
 		logger = log.GetSugger()
 	)
-	validator, err := s.getFundMovementValidator(ctx, transactionID)
+	repo := NewRepository(s.db)
+	destConfirmed, err := repo.GetFundMovement(ctx, FundMovement{
+		TransactionID: transactionID,
+	})
 	if err != nil {
-		logger.Error("failed to get fm validator", "err", err)
-		return err
-	}
-	isFinal, err := validator.isTransactionFinal()
-	// TODO: Need to send alert to trigger manual check
-	if err != nil {
-		logger.Error("suspicious fund movemnet transaction", "err", err, "transaction", transactionID)
+		logger.Error("failed to get fund movement status", "err", err)
 		return err
 	}
 
-	if isFinal {
+	if destConfirmed.Stage == FMStageDestConfirmd {
 		return nil
+	}
+
+	if destConfirmed.Stage == FMStageRollbacked {
+		logger.Error("fund movement already rolledbacked")
+		return ErrRollbacked
 	}
 	// check if transaction is already tried
 	log.GetLogger().Info(fmt.Sprintf("start confirm transaction %v", transactionID))
-	repo := NewRepository(s.db)
-	payment := validator.getPayment()
-
-	if _, err = repo.GetFundMovement(ctx, FundMovement{
-		TransactionID:    transactionID,
-		FundMovementType: string(FMPaymentReceived),
-	}); err == nil {
-		// if already confirmed, don't need to do anything
-		return nil
-	}
-
-	if err != gorm.ErrRecordNotFound {
-		return ErrInternalError
-	}
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		paymentRecieved := &FundMovement{
-			TransactionID:        payment.TransactionID,
-			SourceAccountID:      payment.SourceAccountID,
-			DestinationAccountID: payment.DestinationAccountID,
-			Amount:               payment.Amount,
-			FundMovementType:     string(FMPaymentReceived),
+
+		if err = tx.Model(FundMovement{}).Where("transaction_id = ?", destConfirmed.TransactionID).Update("stage", FMStageDestConfirmd).Error; err != nil {
+			return ErrFMFailedToMoveDestConfirmed
 		}
 
-		if err = tx.Model(FundMovement{}).Create(paymentRecieved).Error; err != nil {
-			return ErrFailedToWritePaymentReceived
-		}
-
-		if err = updateAccountBalance(tx, paymentRecieved.DestinationAccountID, payment.Amount); err != nil {
+		if err = updateAccountBalance(tx, destConfirmed.DestinationAccountID, destConfirmed.Amount); err != nil {
 			return err
 		}
 
@@ -156,49 +153,49 @@ func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
  * If the fundmovements looks fine, create a refund fundmovement and add amount in payment back to source acount
  */
 func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
-	validator, err := s.getFundMovementValidator(ctx, transactionID)
-	if err != nil {
-		return err
-	}
-	isFinal, err := validator.isTransactionFinal()
-	// TODO: Need to send alert to trigger manual check
-	if err != nil {
+	var (
+		err    error
+		logger = log.GetSugger()
+	)
+	repo := NewRepository(s.db)
+	rollback, err := repo.GetFundMovement(ctx, FundMovement{
+		TransactionID: transactionID,
+	})
+	if err != nil && err != gorm.ErrRecordNotFound {
+
 		return err
 	}
 
-	// only transaction in middle way need to cancel
-	if isFinal || validator.isTransactionPending() {
+	// Cancel before try, put a rollback with 0 amount
+	if err == gorm.ErrRecordNotFound {
+		logger.Info("Cancel before try, save a rollback fm", "transactionID", transactionID)
+		return repo.CreateFundMovement(ctx, &FundMovement{
+			TransactionID: transactionID,
+			Stage:         FMStageRollbacked,
+		})
+	}
+
+	if rollback.Stage == FMStageDestConfirmd {
+		return ErrConfirmed
+	}
+
+	if rollback.Stage == FMStageRollbacked {
 		return nil
 	}
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		payment := validator.getPayment()
-		paymentRefund := &FundMovement{
-			TransactionID:        payment.TransactionID,
-			SourceAccountID:      payment.SourceAccountID,
-			DestinationAccountID: payment.DestinationAccountID,
-			Amount:               payment.Amount,
-			FundMovementType:     string(FMPaymentRefund),
-		}
+
 		// Create refund fund movement
-		if err := tx.Model(FundMovement{}).Create(paymentRefund).Error; err != nil {
-			return ErrFailedToWritePayment
+		if err := tx.Model(FundMovement{}).Where("transaction_id = ?", rollback.TransactionID).Update("stage", FMStageRollbacked).Error; err != nil {
+			return ErrFailedToRollback
 		}
 		// add back amount to source account
-		if err := updateAccountBalance(tx, paymentRefund.SourceAccountID, payment.Amount); err != nil {
+		if err := updateAccountBalance(tx, rollback.SourceAccountID, rollback.Amount); err != nil {
 			return err
 		}
 
 		return nil
 	})
-}
-
-func (s *tccService) getFundMovementValidator(ctx context.Context, transactionID string) (*fundMovementValidator, error) {
-	fundMvmts, err := NewRepository(s.db).QueryFundMovement(ctx, transactionID)
-	if err != nil {
-		return nil, err
-	}
-	return newFundMovementValidator(fundMvmts)
 }
 
 func updateAccountBalance(tx *gorm.DB, accountID int, amount float64) error {
@@ -218,56 +215,4 @@ func updateAccountBalance(tx *gorm.DB, accountID int, amount float64) error {
 		return ErrFailedToDeductSourceBalance
 	}
 	return nil
-}
-
-type fundMovementValidator struct {
-	inFlow        int
-	outFlow       int
-	payment       *FundMovement
-	transactionID string
-}
-
-func newFundMovementValidator(fms []FundMovement) (*fundMovementValidator, error) {
-	validator := &fundMovementValidator{}
-
-	for idx, fm := range fms {
-		switch fm.FundMovementType {
-		case string(FMPayment):
-			validator.inFlow++
-			validator.payment = &fms[idx]
-			validator.transactionID = fm.TransactionID
-		case string(FMPaymentRefund), string(FMPaymentReceived):
-			validator.outFlow++
-			validator.transactionID = fm.TransactionID
-		default:
-			return nil, errors.New(fmt.Sprintf("unsupported movement type %v", fm.FundMovementType))
-		}
-	}
-	return validator, nil
-}
-
-/**
- * Checks if current transaction is cancellable, according to fund movement records.
- */
-func (v *fundMovementValidator) isTransactionFinal() (bool, error) {
-	if v.inFlow > 1 || v.outFlow > 1 || (v.inFlow == 0 && v.outFlow != 0) {
-		return false, errors.New(fmt.Sprintf("fatal errors, fund movements not correct under transaction %v", v.transactionID))
-	}
-
-	if (v.inFlow == v.outFlow) && v.inFlow != 0 {
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func (v *fundMovementValidator) isTransactionPending() bool {
-	if v.inFlow == 0 && v.outFlow == 0 {
-		return true
-	}
-	return false
-}
-
-func (v *fundMovementValidator) getPayment() *FundMovement {
-	return v.payment
 }

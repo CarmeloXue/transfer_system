@@ -14,3 +14,12 @@ func SetupTestDB() (*gorm.DB, error) {
 
 	return db, nil
 }
+
+func PrepareData[T any](db *gorm.DB, data []T) {
+	for _, acc := range data {
+		result := db.Create(&acc)
+		if result.Error != nil {
+			panic("failed to seed data")
+		}
+	}
+}

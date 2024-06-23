@@ -13,6 +13,7 @@ type AccountRepository interface {
 	CreateAccount(ctx context.Context, account *Account) error
 	GetAccountByID(ctx context.Context, id int) (Account, error)
 
+	CreateFundMovement(ctx context.Context, fm *FundMovement) error
 	GetFundMovement(ctx context.Context, query FundMovement) (*FundMovement, error)
 	QueryFundMovement(ctx context.Context, transactionID string) ([]FundMovement, error)
 }
@@ -57,6 +58,14 @@ func (r *repository) GetFundMovement(_ context.Context, query FundMovement) (*Fu
 	}
 
 	return &fm, nil
+}
+
+func (r *repository) CreateFundMovement(_ context.Context, fm *FundMovement) error {
+	if err := r.db.Create(fm).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *repository) QueryFundMovement(_ context.Context, transactionID string) ([]FundMovement, error) {

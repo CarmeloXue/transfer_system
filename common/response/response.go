@@ -21,7 +21,7 @@ func Err(c *gin.Context, err error) {
 	})
 }
 
-func ErrorParam(c *gin.Context, errMsg string) {
+func ErrorParam(c *gin.Context,  errMsg string) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"message": fmt.Sprintf("param error: %v", errMsg),
 		"data":    "",
