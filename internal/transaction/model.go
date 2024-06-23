@@ -2,6 +2,16 @@ package transaction
 
 import "time"
 
+type TransactionStatus string
+
+var (
+	Pending    TransactionStatus = "pending"
+	Processing TransactionStatus = "processing"
+	Failed     TransactionStatus = "failed"
+	Fulfiled   TransactionStatus = "fulfiled"
+	Refunded   TransactionStatus = "refunded"
+)
+
 type Transaction struct {
 	ID                   int       `gorm:"primaryKey;column:id" json:"id"`
 	SourceAccountID      int       `gorm:"column:source_account_id" json:"source_account_id"`

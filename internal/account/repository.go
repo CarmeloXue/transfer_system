@@ -11,7 +11,8 @@ type AccountRepository interface {
 	CreateAccount(ctx context.Context, account *Account) error
 	GetAccountByID(ctx context.Context, id int) (Account, error)
 
-	GetFundMovement(ctx context.Context, transactionID, sourceID int, fundMovementType FundMovementType) (FundMovement, error)
+	GetFundMovement(ctx context.Context, query FundMovement) (FundMovement, error)
+	QueryFundMovement(ctx context.Context, transactionID int) ([]FundMovement, error)
 }
 
 type repository struct {
@@ -47,12 +48,19 @@ func (r *repository) countAccount(_ context.Context) (int64, error) {
 	return count, nil
 }
 
-func (r *repository) GetFundMovement(_ context.Context, transactionID, sourceID int, fundMovementType FundMovementType) (FundMovement, error) {
+func (r *repository) GetFundMovement(_ context.Context, query FundMovement) (FundMovement, error) {
 	var fm *FundMovement
-	r.db.First(fm, FundMovement{
-		TransactionID:    transactionID,
-		SourceAccountID:  sourceID,
-		FundMovementType: string(fundMovementType),
-	})
+	r.db.First(fm, query)
 	return FundMovement{}, nil
+}
+
+func (r *repository) QueryFundMovement(_ context.Context, transactionID int) ([]FundMovement, error) {
+	var fundmvmts = make([]FundMovement, 3) // there are only 2(I'm thinking to add a refund type for mannual refund) and trx_id - fund_movement_type is unique key
+
+	if err := r.db.Where("transaction_id = ?", transactionID).Find(&fundmvmts).Error; err != nil {
+		return nil, err
+	}
+
+	return fundmvmts, nil
+
 }

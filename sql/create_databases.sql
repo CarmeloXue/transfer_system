@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS fund_movement_tab (
     destination_account_id INT NOT NULL,
     amount DECIMAL(20, 8) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (transaction_id, fund_movement_type)
 );
 
 

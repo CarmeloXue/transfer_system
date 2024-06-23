@@ -22,11 +22,16 @@ var (
 	ErrFailedToAddDestinationBalance = errors.New("failed to add destination balance")
 	ErrTransactionTried              = errors.New("transaction already tried")
 	ErrInternalError                 = errors.New("internal error")
+	ErrPaymentNotDone                = errors.New("payment not done")
+	ErrFailedToWritePaymentReceived  = errors.New("failed to write payment received")
 )
 
 type TCC interface {
-	// TCC api
 	Try(ctx context.Context, transactionID, sourceAccountID, destinationAccountID int, amount float64) error
+
+	Confirm(ctx context.Context, transactionID int) error
+
+	Cancel(ctx context.Context, transactionID int) error
 }
 
 type tccService struct {
@@ -38,12 +43,13 @@ func NewTCCService(db *gorm.DB) TCC {
 }
 
 // Try will write a payment fund movement, then deduct from source user's amount
-func (r *tccService) Try(ctx context.Context, transactionID, sourceAccountID, destinationAccountID int, amount float64) error {
-	txCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
+func (s *tccService) Try(ctx context.Context, transactionID, sourceAccountID, destinationAccountID int, amount float64) error {
 	// check if transaction is already tried
-	repo := NewRepository(r.db)
-	if _, err := repo.GetFundMovement(ctx, transactionID, sourceAccountID, Payment); err == nil {
+	repo := NewRepository(s.db)
+	if _, err := repo.GetFundMovement(ctx, FundMovement{
+		TransactionID:    transactionID,
+		FundMovementType: string(Payment),
+	}); err == nil {
 		return ErrTransactionTried
 	} else {
 		if err != gorm.ErrRecordNotFound {
@@ -51,69 +57,148 @@ func (r *tccService) Try(ctx context.Context, transactionID, sourceAccountID, de
 		}
 	}
 
-	tx := r.db.WithContext(txCtx).Begin()
-	if tx.Error != nil {
-		panic("failed to begin transaction")
-	}
+	txCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+	return s.db.WithContext(txCtx).Transaction(func(tx *gorm.DB) error {
+		payment := FundMovement{
+			TransactionID:        transactionID,
+			SourceAccountID:      sourceAccountID,
+			DestinationAccountID: destinationAccountID,
+			Amount:               amount,
+			FundMovementType:     string(Payment),
 		}
-	}()
+		// Create deduct fund movement
+		if err := tx.Model(FundMovement{}).Create(&payment).Error; err != nil {
+			return ErrFailedToWritePayment
+		}
 
-	payment := FundMovement{
-		TransactionID:        transactionID,
-		SourceAccountID:      sourceAccountID,
-		DestinationAccountID: destinationAccountID,
-		Amount:               amount,
-		FundMovementType:     string(Payment),
-	}
-	// Create deduct fund movement
-	if err := tx.Model(FundMovement{}).Create(&payment).Error; err != nil {
-		tx.Rollback()
-		return ErrFailedToWritePayment
+		if err := updateAccountBalance(tx, sourceAccountID, -amount); err != nil {
+			return err
+		}
+
+		log.GetLogger().Info(fmt.Sprintf("try transaction success. transaction: %v amount: %v\n", transactionID, amount))
+		return nil
+	})
+}
+
+/**
+ * Confirm used to send funds to destination accounts after check fundmovement
+ * If had payment_recieved, will just return success to keep idenpotent. 
+ * If confirm failed, can retry.
+ */
+func (s *tccService) Confirm(ctx context.Context, transactionID int) error {
+	var (
+		err     error
+		payment FundMovement
+	)
+	// check if transaction is already tried
+	repo := NewRepository(s.db)
+	if payment, err = repo.GetFundMovement(ctx, FundMovement{
+		TransactionID:    transactionID,
+		FundMovementType: string(Payment),
+	}); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrPaymentNotDone
+		}
+		return ErrInternalError
 	}
 
+	if _, err = repo.GetFundMovement(ctx, FundMovement{
+		TransactionID:    transactionID,
+		FundMovementType: string(PaymentReceived),
+	}); err == nil {
+		// if already confirmed, don't need to do anything
+		return nil
+	}
+
+	if err != gorm.ErrRecordNotFound {
+		return ErrInternalError
+	}
+
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		paymentRecieved := payment
+		paymentRecieved.FundMovementType = string(PaymentReceived)
+
+		if err = tx.Model(FundMovement{}).Create(&paymentRecieved).Error; err != nil {
+			return ErrFailedToWritePaymentReceived
+		}
+
+		if err = updateAccountBalance(tx, paymentRecieved.DestinationAccountID, paymentRecieved.Amount); err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+/**
+ * Cancale a transaction
+ * If cancel before try, just return success.
+ * If the fundmovements record is not valie, which means it will be a big bug in this system, need to alert admin to check
+ * If the fundmovements looks fine, create a refund fundmovement and add amount in payment back to source acount
+ */
+func (s *tccService) Cancel(ctx context.Context, transactionID int) error {
+	fundMvmts, err := NewRepository(s.db).QueryFundMovement(ctx, transactionID)
+	if err != nil {
+		return err
+	}
+	cancelValidators := cancelValidator(fundMvmts)
+	needCancel, err := cancelValidators.needToCancel()
+
+	// TODO: Need to send alert to trigger manual check
+	if err != nil {
+		return err
+	}
+
+	if !needCancel {
+		return nil
+	}
+
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		payment := cancelValidators.getPayment()
+		paymentRefund := payment
+		paymentRefund.FundMovementType = string(PaymentRefund)
+		// Create refund fund movement
+		if err := tx.Model(FundMovement{}).Create(&paymentRefund).Error; err != nil {
+			return ErrFailedToWritePayment
+		}
+		// add back amount to source account
+		if err := updateAccountBalance(tx, paymentRefund.SourceAccountID, payment.Amount); err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+func updateAccountBalance(tx *gorm.DB, accountID int, amount float64) error {
 	// Deduct user's balance
 	account := Account{}
 	if err := tx.First(&account, Account{
-		AccountID: sourceAccountID,
+		AccountID: accountID,
 	}).Error; err != nil {
-		tx.Rollback()
 		return ErrFailedToLoadUser
 	}
-
-	if account.Balance < amount {
-		tx.Rollback()
+	newBalance := account.Balance + amount
+	if newBalance < 0 {
 		return ErrInsufficientBalance
 	}
 
-	newBalance := account.Balance - amount
 	if err := tx.Model(Account{}).Where("account_id = ?", account.AccountID).Update("balance", newBalance).Error; err != nil {
-		tx.Rollback()
 		return ErrFailedToDeductSourceBalance
 	}
-
-	if err := tx.Commit().Error; err != nil {
-		tx.Rollback()
-		return ErrFailedToCommit
-	}
-
-	log.GetLogger().Info(fmt.Sprintf("try transaction success. transaction: %v amount: %v\n", transactionID, amount))
 	return nil
 }
 
-func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Implement the Confirm logic (finalize the transfer, etc.)
-		return nil
-	})
+type cancelValidator []FundMovement
+
+func (v cancelValidator) needToCancel() (bool, error) {
+
+	return true, nil
 }
 
-func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Implement the Cancel logic (rollback the reservation, etc.)
-		return nil
-	})
+func (v cancelValidator) getPayment() FundMovement {
+
+	return FundMovement{}
 }

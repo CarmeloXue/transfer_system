@@ -7,6 +7,7 @@ type FundMovementType string
 var (
 	Payment         FundMovementType = "Payment"
 	PaymentReceived FundMovementType = "PaymentReceived"
+	PaymentRefund   FundMovementType = "PaymentRefund" // This is used to refund a payment in cancel.
 )
 
 type FundMovement struct {
