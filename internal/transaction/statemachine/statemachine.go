@@ -1,4 +1,4 @@
-package transaction
+package statemachine
 
 import (
 	"context"
@@ -10,13 +10,12 @@ import (
 type Event string
 
 var (
-	EventPendingProcess Event = "PendingProcess"
-	EventPendingFulfil  Event = "PendingFulfil"
-	EventPendingRefund  Event = "PendingRefund"
-	EventPendingFailed  Event = "PendingFailed"
-	EventFulfiled       Event = "Fulfiled"
-	EventRefund         Event = "Refund"
-	EventFailed         Event = "Failed"
+	EventPendingFulfil Event = "PendingFulfil"
+	EventPendingRefund Event = "PendingRefund"
+	EventPendingFailed Event = "PendingFailed"
+	EventFulfiled      Event = "Fulfiled"
+	EventRefund        Event = "Refund"
+	EventFailed        Event = "Failed"
 )
 
 type State struct {
@@ -97,18 +96,18 @@ func (sm StateMachine) Start(ctx context.Context, startEvent Event, trx *model.T
 		// Create a context with timeout based on currentState.TimeoutSeconds
 		actionCtx, cancel := context.WithTimeout(ctx, time.Duration(currentState.TimeoutSeconds)*time.Second)
 		defer cancel() // Ensure cancel is called to release resources
-
 		// Retry loop based on MaxRetries
 		for retry := 0; retry < currentState.MaxCallTimes; retry++ {
 			var nextEvent Event
 			nextEvent, err = currentState.Action(actionCtx, trx)
+			if err == nil {
+				currentEvent = nextEvent
+				break
+			}
+
 			if retry < currentState.MaxCallTimes {
 				continue
 			}
-			if err != nil {
-				return err
-			}
-			currentEvent = nextEvent
 		}
 
 		if err != nil {
