@@ -2,8 +2,9 @@ package utils
 
 import (
 	"errors"
-	"math"
+	"fmt"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -12,21 +13,33 @@ var (
 	ErrAmountExceedsMaxValue = errors.New("invalid amount. exceeds max value")
 )
 
-// ParseFloat64String validates if a string can be parsed into a float64.
-func ParseFloat64String(s string) (float64, error) {
-	v, err := strconv.ParseFloat(s, 64)
+func ParseFloat64String(input string) (float64, error) {
+	// Remove any leading or trailing whitespace
+	input = strings.TrimSpace(input)
+
+	// Split the input by the decimal point
+	parts := strings.Split(input, ".")
+	if len(parts) > 2 {
+		return 0, ErrAmountInvalidFormat
+	}
+
+	// Parse the integer part
+	intPart := parts[0]
+	intValue, err := strconv.Atoi(intPart)
 	if err != nil {
 		return 0, ErrAmountInvalidFormat
 	}
-	if v < 0 {
+	if intValue < 0 {
 		return 0, ErrAmountNegative
 	}
 
-	if v > math.MaxFloat64 || v < -math.MaxFloat64 {
-		return 0, ErrAmountExceedsMaxValue
+	// Convert the input string to a float
+	value, err := strconv.ParseFloat(input, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse input as float: %v", err)
 	}
 
-	return v, nil
+	return value, nil
 }
 
 // StringToFloat64 converts a string to float64.
