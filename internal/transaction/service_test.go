@@ -6,6 +6,8 @@ import (
 	"main/common/db/testutils"
 	"main/common/utils"
 	"main/internal/account"
+	tcctestutils "main/internal/account/testutils"
+
 	"main/model"
 	"testing"
 
@@ -51,7 +53,12 @@ func (s *transactionServiceSuite) TeardownTest() {
 }
 
 func (s *transactionServiceSuite) newMockService() Service {
-	return NewService(NewRepository(s.transactionDB), account.NewTCCService(s.accountDB), account.NewRepository(s.accountDB))
+	return NewService(NewRepository(s.transactionDB), tcctestutils.NewMockTCC(account.NewTCCService(s.accountDB), false, false, false), account.NewRepository(s.accountDB))
+}
+
+func (s *transactionServiceSuite) newMockServiceWithTCCTimeout(try, confirm, cancel bool) Service {
+	return NewService(NewRepository(s.transactionDB), tcctestutils.NewMockTCC(account.NewTCCService(s.accountDB), try, confirm,
+		cancel), account.NewRepository(s.accountDB))
 }
 
 func (s *transactionServiceSuite) Test_CreateTransaction_Happyflow() {
@@ -59,7 +66,7 @@ func (s *transactionServiceSuite) Test_CreateTransaction_Happyflow() {
 		req = CreateTransactionRequest{
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
-			Amount:               "199.9",
+			Amount:               "9.0",
 		}
 		ctx     = context.Background()
 		service = s.newMockService()
@@ -71,7 +78,8 @@ func (s *transactionServiceSuite) Test_CreateTransaction_Happyflow() {
 
 	assert.Equal(s.T(), req.SourceAccountID, trx.SourceAccountID)
 	assert.Equal(s.T(), req.DestinationAccountID, trx.DestinationAccountID)
-	assert.Equal(s.T(), req.Amount, fmt.Sprint(trx.Amount))
+	floatVal, _ := utils.ParseFloat64String(req.Amount)
+	assert.Equal(s.T(), floatVal, trx.Amount)
 }
 
 func (s *transactionServiceSuite) Test_CreateTransaction_InvalidAmount_ShouldReturnError() {
@@ -166,6 +174,28 @@ func (s *transactionServiceSuite) Test_Multiple_Create_Happyflow() {
 			Balance:   5,
 		},
 	})
+}
+
+func (s *transactionServiceSuite) Test_TryTimeout_EmptyCancel_TransactionStatus_ShouldBeFailed() {
+	var (
+		req = CreateTransactionRequest{
+			SourceAccountID:      1,
+			DestinationAccountID: 2,
+			Amount:               "9.0",
+		}
+		ctx     = context.Background()
+		service = s.newMockServiceWithTCCTimeout(true, false, false)
+	)
+
+	trx, err := service.CreateTransaction(ctx, req)
+	assert.EqualError(s.T(), context.DeadlineExceeded, err.Error())
+	assert.NotNil(s.T(), trx)
+
+	assert.Equal(s.T(), req.SourceAccountID, trx.SourceAccountID)
+	assert.Equal(s.T(), req.DestinationAccountID, trx.DestinationAccountID)
+	floatVal, _ := utils.ParseFloat64String(req.Amount)
+	assert.Equal(s.T(), floatVal, trx.Amount)
+	assert.Equal(s.T(), model.Failed, trx.TransactionStatus)
 
 }
 

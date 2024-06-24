@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	DefaultCreateTransactionTimeoutSeconds = 3
+	DefaultCreateTransactionTimeoutSeconds = 5
 	MaxRetry                               = 5
 )
 
@@ -64,7 +64,7 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 		TransactionID:        utils.GenerateTransactionID(),
 		TransactionStatus:    model.Pending,
 	}
-	tCtx, cancel := context.WithTimeout(ctx, time.Hour*DefaultCreateTransactionTimeoutSeconds)
+	tCtx, cancel := context.WithTimeout(ctx, time.Second*DefaultCreateTransactionTimeoutSeconds)
 	defer cancel()
 	// Create pending transaction
 	err = s.repo.CreateTransaction(tCtx, trx)
@@ -165,14 +165,20 @@ func (s *service) processTransaction(ctx context.Context, transactionID string) 
 }
 
 func (s *service) retryCancel(ctx context.Context, tx *model.Transaction) {
-	log.GetSugger().Info("start to cancel transaction ", "transaction", tx.TransactionID)
+	log.GetSugger().Info("start to cancel transaction ", "transaction", tx)
 
 	if err := s.repo.Transaction(func(txn *gorm.DB) error {
 		var err error
 		for i := 0; i < tx.Retries; i++ {
+			log.GetSugger().Info("call cancel ", "transaction", tx.TransactionID, "err", err)
 			err = s.accountTCC.Cancel(ctx, tx.TransactionID)
-			if err == nil {
-				if err = txn.Model(model.Transaction{}).Where("transaction_id = ?", tx.TransactionID).Update("transaction_status", model.Refunded).Error; err == nil {
+			log.GetSugger().Info("try cancel ", "transaction", tx.TransactionID, "err", err)
+			if err == nil || err == account.ErrEmptyRollback {
+				status := model.Refunded
+				if err == account.ErrEmptyRollback {
+					status = model.Failed
+				}
+				if err = txn.Model(model.Transaction{}).Where("transaction_id = ?", tx.TransactionID).Update("transaction_status", status).Error; err == nil {
 					return nil
 				}
 			}
@@ -183,7 +189,6 @@ func (s *service) retryCancel(ctx context.Context, tx *model.Transaction) {
 		// TODO: alert
 		log.GetSugger().Error("failed to cancel transaction ", "transaction", tx, "err", err)
 	}
-
 }
 
 func (s *service) retryConfirm(ctx context.Context, tx *model.Transaction) {

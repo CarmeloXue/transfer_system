@@ -5,14 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"main/common/log"
-	"main/model"
 	. "main/model"
-	"time"
 
 	"gorm.io/gorm"
 )
-
-const timeoutSeconds = 3
 
 var (
 	ErrFailedToWritePayment          = errors.New("failed to write payment")
@@ -29,6 +25,7 @@ var (
 	ErrRollbacked                    = errors.New("rollbacked")
 	ErrConfirmed                     = errors.New("confirmed")
 	ErrFailedToRollback              = errors.New("failed to rollback")
+	ErrEmptyRollback                 = errors.New("empty rollback")
 )
 
 type TCC interface {
@@ -56,27 +53,30 @@ func NewTCCService(db *gorm.DB) TCC {
 func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount float64) error {
 	var (
 		logger = log.GetSugger()
-		repo   = NewRepository(s.db)
 	)
-	// check if transaction is already tried
-	fundMovement, err := repo.GetFundMovement(ctx, FundMovement{
-		TransactionID: transactionID,
-	})
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return err
-	}
 
-	if err != gorm.ErrRecordNotFound && fundMovement.Stage == model.FMStageSourceOnHold {
-		return nil
-	}
-	if err != gorm.ErrRecordNotFound && fundMovement.Stage == model.FMStageRollbacked {
-		return ErrRollbacked
-	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// check if transaction is already tried
+		var fundMovement FundMovement
+		err := tx.Model(FundMovement{}).First(&fundMovement, FundMovement{TransactionID: transactionID}).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
 
-	txCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
+		// when no error returns， means there already have a fund movement, need to return here
+		if err != gorm.ErrRecordNotFound {
+			switch fundMovement.Stage {
+			case FMStageDestConfirmd:
+				return nil
+			case FMStageSourceOnHold:
+				return nil
+			case FMStageRollbacked:
+				return ErrRollbacked
+			default:
+				return errors.New("unknow fund movement status")
+			}
+		}
 
-	return s.db.WithContext(txCtx).Transaction(func(tx *gorm.DB) error {
 		sourceOnHold := FundMovement{
 			TransactionID:        transactionID,
 			SourceAccountID:      sourceAccountID,
@@ -84,8 +84,10 @@ func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccoun
 			Amount:               amount,
 			Stage:                FMStageSourceOnHold,
 		}
-		// Create deduct fund movement
+		// Create deduct fund movement.
 		if err := tx.Model(FundMovement{}).Create(&sourceOnHold).Error; err != nil {
+			// race condition, other goroutine created it between last check and start transaction
+			// just return normal nil to keep idempotent
 			if err == gorm.ErrDuplicatedKey {
 				return nil
 			}
@@ -112,30 +114,29 @@ func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccoun
  */
 func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
 	var (
-		err    error
 		logger = log.GetSugger()
 	)
-	repo := NewRepository(s.db)
-	destConfirmed, err := repo.GetFundMovement(ctx, FundMovement{
-		TransactionID: transactionID,
-	})
-	if err != nil {
-		logger.Error("failed to get fund movement status", "err", err)
-		return err
-	}
 
-	if destConfirmed.Stage == FMStageDestConfirmd {
-		return nil
-	}
-
-	if destConfirmed.Stage == FMStageRollbacked {
-		logger.Error("fund movement already rolledbacked")
-		return ErrRollbacked
-	}
 	// check if transaction is already tried
 	log.GetLogger().Info(fmt.Sprintf("start confirm transaction %v", transactionID))
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var destConfirmed FundMovement
+		err := tx.Model(Transaction{}).First(&destConfirmed, FundMovement{TransactionID: transactionID}).Error
+		// call confirm before try is not allowed, so not check not found here
+		if err != nil {
+			logger.Error("failed to get fund movement status", "err", err)
+			return err
+		}
+
+		if destConfirmed.Stage == FMStageDestConfirmd {
+			return nil
+		}
+
+		if destConfirmed.Stage == FMStageRollbacked {
+			logger.Error("fund movement already rolledbacked")
+			return ErrRollbacked
+		}
 		if err = tx.Model(FundMovement{}).Where("transaction_id = ?", destConfirmed.TransactionID).Update("stage", FMStageDestConfirmd).Error; err != nil {
 			return ErrFMFailedToMoveDestConfirmed
 		}
@@ -174,10 +175,14 @@ func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 	// Cancel before try, put a rollback with 0 amount
 	if err == gorm.ErrRecordNotFound {
 		logger.Info("Cancel before try, save a rollback fm", "transactionID", transactionID)
-		return repo.CreateFundMovement(ctx, &FundMovement{
+		err = repo.CreateFundMovement(ctx, &FundMovement{
 			TransactionID: transactionID,
 			Stage:         FMStageRollbacked,
 		})
+		if err != nil {
+			return err
+		}
+		return ErrEmptyRollback
 	}
 
 	if rollback.Stage == FMStageDestConfirmd {

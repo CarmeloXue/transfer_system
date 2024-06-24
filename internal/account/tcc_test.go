@@ -407,7 +407,7 @@ func (s *tccSuite) Test_Try_Cancel_Confirm() {
 	s.validateAccounts(ctx, accounts)
 }
 
-func (s *tccSuite) Test__Cancel_Try() {
+func (s *tccSuite) Test_Cancel_Try() {
 	var (
 		accounts = []Account{
 			{
@@ -432,7 +432,7 @@ func (s *tccSuite) Test__Cancel_Try() {
 	s.prepareAccounts(accounts)
 
 	err = tcc.Cancel(ctx, trx.TransactionID)
-	assert.NoError(s.T(), err)
+	assert.NoError(s.T(), ErrEmptyRollback)
 	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
 	assert.EqualError(s.T(), ErrRollbacked, err.Error())
 
@@ -457,7 +457,7 @@ func (s *tccSuite) validateAccounts(ctx context.Context, expectAccountStatus []A
 	for _, acc := range expectAccountStatus {
 		resp, err := s.repository.GetAccountByID(ctx, acc.AccountID)
 		assert.NoError(s.T(), err)
-		assert.Equal(s.T(), resp.Balance, acc.Balance)
+		assert.Equal(s.T(), acc.Balance, resp.Balance)
 	}
 }
 
