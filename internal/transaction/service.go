@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	DefaultCreateTransactionTimeoutSeconds = 5
-	MaxRetry                               = 5
+	DefaultCreateTransactionTimeoutSeconds = 3
+	DefaultTryTransactionTimeoutSeconds    = 1
+
+	MaxRetry = 3
 )
 
 var (
@@ -118,13 +120,7 @@ func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequ
 
 func (s *service) processTransaction(ctx context.Context, transaction *model.Transaction) (<-chan model.Transaction, error) {
 	var err error
-	if err = s.accountTCC.Try(ctx, transaction.TransactionID, transaction.SourceAccountID, transaction.DestinationAccountID, transaction.Amount); err != nil {
-		return nil, err
-	}
-	if err = s.repo.UpdateTransactionStatus(ctx, transaction.TransactionID, model.Processing); err != nil {
-		return nil, err
-	}
-
+	err = s.tryWithTimeout(ctx, transaction)
 	transactionChan := make(chan model.Transaction)
 	go func() {
 		defer close(transactionChan)
@@ -199,5 +195,32 @@ func (s *service) retryConfirm(ctx context.Context, tx *model.Transaction) {
 	}); tErr != nil {
 		// TODO: alert
 		log.GetSugger().Error("failed to confirm transaction ", "transaction", tx, "err", err)
+	}
+}
+
+func (s *service) try(ctx context.Context, tx *model.Transaction) <-chan error {
+	errChan := make(chan error)
+
+	go func() {
+		defer close(errChan)
+		if err := s.accountTCC.Try(ctx, tx.TransactionID, tx.SourceAccountID, tx.DestinationAccountID, tx.Amount); err != nil {
+			errChan <- err
+		}
+	}()
+
+	return errChan
+}
+
+func (s *service) tryWithTimeout(ctx context.Context, tx *model.Transaction) error {
+	timeOutCtx, cancel := context.WithTimeout(ctx, time.Second*DefaultTryTransactionTimeoutSeconds)
+	defer cancel()
+
+	errChan := s.try(ctx, tx)
+
+	select {
+	case <-timeOutCtx.Done():
+		return timeOutCtx.Err()
+	case err := <-errChan:
+		return err
 	}
 }
