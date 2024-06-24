@@ -53,7 +53,7 @@ func (r *repository) countAccount(_ context.Context) (int64, error) {
 
 func (r *repository) GetFundMovement(_ context.Context, query FundMovement) (*FundMovement, error) {
 	var fm FundMovement
-	if err := r.db.First(&fm, query).Error; err != nil {
+	if err := r.db.Model(FundMovement{}).First(&fm, query).Error; err != nil {
 		return nil, err
 	}
 
@@ -61,7 +61,7 @@ func (r *repository) GetFundMovement(_ context.Context, query FundMovement) (*Fu
 }
 
 func (r *repository) CreateFundMovement(_ context.Context, fm *FundMovement) error {
-	if err := r.db.Create(fm).Error; err != nil {
+	if err := r.db.Model(FundMovement{}).Create(fm).Error; err != nil {
 		return err
 	}
 
@@ -71,7 +71,7 @@ func (r *repository) CreateFundMovement(_ context.Context, fm *FundMovement) err
 func (r *repository) QueryFundMovement(_ context.Context, transactionID string) ([]FundMovement, error) {
 	var fundmvmts = make([]FundMovement, 3) // there are only 2(I'm thinking to add a refund type for mannual refund) and trx_id - fund_movement_type is unique key
 
-	if err := r.db.Where("transaction_id = ?", transactionID).Find(&fundmvmts).Error; err != nil {
+	if err := r.db.Model(FundMovement{}).Where("transaction_id = ?", transactionID).Find(&fundmvmts).Error; err != nil {
 		return nil, err
 	}
 

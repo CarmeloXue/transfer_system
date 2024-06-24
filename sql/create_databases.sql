@@ -37,9 +37,9 @@ CREATE TABLE IF NOT EXISTS transaction_tab (
     source_account_id INT NOT NULL,
     destination_account_id INT NOT NULL,
     amount DECIMAL(20, 8) NOT NULL,
-    status VARCHAR(20) NOT NULL,
+    transaction_status INT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_transactions_status ON transaction_tab(status);
+CREATE INDEX idx_transactions_status ON transaction_tab(transaction_status);

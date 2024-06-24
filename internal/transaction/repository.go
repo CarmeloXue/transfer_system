@@ -2,6 +2,8 @@ package transaction
 
 import (
 	"context"
+	"database/sql"
+	"main/model"
 	. "main/model"
 	"time"
 
@@ -11,7 +13,8 @@ import (
 type Repository interface {
 	CreateTransaction(ctx context.Context, transaction Transaction) error
 	GetTransactionByID(ctx context.Context, id string) (Transaction, error)
-	UpdateTransactionStatus(ctx context.Context, id string, status string) error
+	UpdateTransactionStatus(ctx context.Context, id string, status model.TransactionStatus) error
+	Transaction(fc func(tx *gorm.DB) error, opts ...*sql.TxOptions) error
 }
 
 type repository struct {
@@ -36,6 +39,10 @@ func (r *repository) GetTransactionByID(ctx context.Context, id string) (Transac
 	return transaction, nil
 }
 
-func (r *repository) UpdateTransactionStatus(ctx context.Context, id string, status string) error {
-	return r.db.Model(&Transaction{}).Where("transaction_id = ?", id).Update("status", status).Error
+func (r *repository) UpdateTransactionStatus(ctx context.Context, id string, status model.TransactionStatus) error {
+	return r.db.Model(&Transaction{}).Where("transaction_id = ?", id).Update("transaction_status", status).Error
+}
+
+func (r *repository) Transaction(fc func(tx *gorm.DB) error, opts ...*sql.TxOptions) error {
+	return r.db.Transaction(fc, opts...)
 }

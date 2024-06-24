@@ -407,6 +407,45 @@ func (s *tccSuite) Test_Try_Cancel_Confirm() {
 	s.validateAccounts(ctx, accounts)
 }
 
+func (s *tccSuite) Test__Cancel_Try() {
+	var (
+		accounts = []Account{
+			{
+				AccountID: 1,
+				Balance:   100.0,
+			},
+			{
+				AccountID: 2,
+				Balance:   100.0,
+			},
+		}
+		tcc = NewTCCService(s.mockDB)
+		ctx = context.Background()
+		trx = Transaction{
+			TransactionID:        "123",
+			SourceAccountID:      1,
+			DestinationAccountID: 2,
+			Amount:               100.0,
+		}
+		err error
+	)
+	s.prepareAccounts(accounts)
+
+	err = tcc.Cancel(ctx, trx.TransactionID)
+	assert.NoError(s.T(), err)
+	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
+	assert.EqualError(s.T(), ErrRollbacked, err.Error())
+
+	refund, err := s.repository.GetFundMovement(ctx, FundMovement{
+		TransactionID: trx.TransactionID,
+	})
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), refund)
+	assert.Equal(s.T(), float64(0), refund.Amount)
+	assert.Equal(s.T(), FMStageRollbacked, refund.Stage)
+	s.validateAccounts(ctx, accounts)
+}
+
 func (s *tccSuite) validateFundMovement(fm *FundMovement, trx Transaction, stage FundMovementStage) {
 	assert.Equal(s.T(), trx.TransactionID, fm.TransactionID)
 	assert.Equal(s.T(), trx.SourceAccountID, fm.SourceAccountID)

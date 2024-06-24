@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"main/common/log"
+	"main/model"
 	. "main/model"
 	"time"
 
@@ -46,31 +47,30 @@ func NewTCCService(db *gorm.DB) TCC {
 	return &tccService{db: db}
 }
 
-// Try will write a payment fund movement, then deduct from source user's amount
+/**
+ * Try will write a payment fund movement, then deduct from source user's amount
+ *
+ * nil error indicates fund movement is SourceOnHold, and source account is deducted.
+ * ErrRollbacked indicates there already an emtpy rollback or real rollback.
+ * */
 func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount float64) error {
 	var (
 		logger = log.GetSugger()
-		// check if transaction is already tried
-		repo = NewRepository(s.db)
+		repo   = NewRepository(s.db)
 	)
-
-	// TODO use goroutine. Currently met a issue in mock db connection in test
-	if _, err := repo.GetAccountByID(ctx, sourceAccountID); err != nil {
-		return errors.New("invalid sender")
-	}
-
-	if _, err := repo.GetAccountByID(ctx, destinationAccountID); err != nil {
-		return errors.New("invalid reciever")
-	}
-
-	if _, err := repo.GetFundMovement(ctx, FundMovement{
+	// check if transaction is already tried
+	fundMovement, err := repo.GetFundMovement(ctx, FundMovement{
 		TransactionID: transactionID,
-	}); err == nil {
+	})
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return err
+	}
+
+	if err != gorm.ErrRecordNotFound && fundMovement.Stage == model.FMStageSourceOnHold {
 		return nil
-	} else {
-		if err != gorm.ErrRecordNotFound {
-			return err
-		}
+	}
+	if err != gorm.ErrRecordNotFound && fundMovement.Stage == model.FMStageRollbacked {
+		return ErrRollbacked
 	}
 
 	txCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -106,6 +106,9 @@ func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccoun
  * Confirm used to send funds to destination accounts after check fundmovement
  * If had payment_recieved, will just return success to keep idenpotent.
  * If confirm failed, can retry.
+ *
+ * nil return means confirm fund movement is destConfirmed and fund added to destination account
+ * ErrRollbacked indicate try to confirm a canceled transaction.
  */
 func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
 	var (
@@ -133,7 +136,6 @@ func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
 	log.GetLogger().Info(fmt.Sprintf("start confirm transaction %v", transactionID))
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-
 		if err = tx.Model(FundMovement{}).Where("transaction_id = ?", destConfirmed.TransactionID).Update("stage", FMStageDestConfirmd).Error; err != nil {
 			return ErrFMFailedToMoveDestConfirmed
 		}
@@ -151,6 +153,10 @@ func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
  * If cancel before try, just return success.
  * If the fundmovements record is not valie, which means it will be a big bug in this system, need to alert admin to check
  * If the fundmovements looks fine, create a refund fundmovement and add amount in payment back to source acount
+ *
+ *  ErrConfirmed indicates transaction confirmed. Don't need to modify transaction
+ *  nil indicates fund movement is rollbacked, adn fund is returned to source. Upstream can change transaction status to refund
+ *
  */
 func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 	var (
@@ -162,7 +168,6 @@ func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 		TransactionID: transactionID,
 	})
 	if err != nil && err != gorm.ErrRecordNotFound {
-
 		return err
 	}
 
@@ -184,7 +189,6 @@ func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 	}
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-
 		// Create refund fund movement
 		if err := tx.Model(FundMovement{}).Where("transaction_id = ?", rollback.TransactionID).Update("stage", FMStageRollbacked).Error; err != nil {
 			return ErrFailedToRollback

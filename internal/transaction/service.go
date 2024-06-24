@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 const (
@@ -61,10 +62,11 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 		DestinationAccountID: req.DestinationAccountID,
 		Amount:               float64Value,
 		TransactionID:        utils.GenerateTransactionID(),
-		Status:               string(model.Pending),
+		TransactionStatus:    model.Pending,
 	}
-	tCtx, cancel := context.WithTimeout(ctx, time.Second*DefaultCreateTransactionTimeoutSeconds)
+	tCtx, cancel := context.WithTimeout(ctx, time.Hour*DefaultCreateTransactionTimeoutSeconds)
 	defer cancel()
+	// Create pending transaction
 	err = s.repo.CreateTransaction(tCtx, trx)
 	if err != nil {
 		return model.Transaction{}, err
@@ -96,7 +98,7 @@ func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequ
 	tCtx, cancel := context.WithTimeout(ctx, time.Second*DefaultCreateTransactionTimeoutSeconds)
 	defer cancel()
 	// Start from try
-	if tx.Status == string(model.Pending) || tx.Status == string(model.Processing) {
+	if tx.TransactionStatus == model.Pending || tx.TransactionStatus == model.Processing {
 		trxChan, err := s.processTransaction(tCtx, tx.TransactionID)
 
 		select {
@@ -120,7 +122,19 @@ func (s *service) processTransaction(ctx context.Context, transactionID string) 
 		return nil, err
 	}
 
-	err = s.accountTCC.Try(ctx, tx.TransactionID, tx.SourceAccountID, tx.DestinationAccountID, tx.Amount)
+	// Push to processing and call try in a same transaction
+	err = s.repo.Transaction(func(txn *gorm.DB) error {
+		if err = txn.Model(model.Transaction{}).Where("transaction_id = ?", tx.TransactionID).Update("transaction_status", model.Processing).Error; err != nil {
+			return err
+		}
+
+		if err = s.accountTCC.Try(ctx, tx.TransactionID, tx.SourceAccountID, tx.DestinationAccountID, tx.Amount); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	transactionChan := make(chan model.Transaction)
 	go func() {
 		defer close(transactionChan)
@@ -130,17 +144,19 @@ func (s *service) processTransaction(ctx context.Context, transactionID string) 
 				transactionChan <- tx
 			}
 		}()
+
 		tx.Retries = MaxRetry
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				s.retryCancel(ctx, &tx)
 			} else {
-				s.updateStatus(ctx, tx.TransactionID, model.Failed)
+				s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Failed)
 			}
 			return
 		}
-		if tx.Status == string(model.Pending) {
-			s.updateStatus(ctx, tx.TransactionID, model.Processing)
+
+		if tx.TransactionStatus == model.Pending {
+			s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Processing)
 		}
 		s.retryConfirm(ctx, &tx)
 	}()
@@ -149,29 +165,43 @@ func (s *service) processTransaction(ctx context.Context, transactionID string) 
 }
 
 func (s *service) retryCancel(ctx context.Context, tx *model.Transaction) {
-	for i := 0; i < tx.Retries; i++ {
-		err := s.accountTCC.Cancel(ctx, tx.TransactionID)
-		if err == nil {
-			s.updateStatus(ctx, tx.TransactionID, model.Failed)
-			return
+	log.GetSugger().Info("start to cancel transaction ", "transaction", tx.TransactionID)
+
+	if err := s.repo.Transaction(func(txn *gorm.DB) error {
+		var err error
+		for i := 0; i < tx.Retries; i++ {
+			err = s.accountTCC.Cancel(ctx, tx.TransactionID)
+			if err == nil {
+				if err = txn.Model(model.Transaction{}).Where("transaction_id = ?", tx.TransactionID).Update("transaction_status", model.Refunded).Error; err == nil {
+					return nil
+				}
+			}
+			time.Sleep(1 * time.Second)
 		}
-		time.Sleep(1 * time.Second)
+		return err
+	}); err != nil {
+		// TODO: alert
+		log.GetSugger().Error("failed to cancel transaction ", "transaction", tx, "err", err)
 	}
-	// TODO: alert
+
 }
 
 func (s *service) retryConfirm(ctx context.Context, tx *model.Transaction) {
 	log.GetLogger().With(zap.Any("transaction", tx)).Info("prepare to confirm")
-	for i := 0; i < tx.Retries; i++ {
-		err := s.accountTCC.Confirm(ctx, tx.TransactionID)
-		if err == nil {
-			s.updateStatus(ctx, tx.TransactionID, model.Fulfiled)
-			return
+	var err error
+	if tErr := s.repo.Transaction(func(txn *gorm.DB) error {
+		for i := 0; i < tx.Retries; i++ {
+			err = s.accountTCC.Confirm(ctx, tx.TransactionID)
+			if err == nil {
+				if err = txn.Model(model.Transaction{}).Where("transaction_id = ?", tx.TransactionID).Update("transaction_status", model.Fulfiled).Error; err == nil {
+					return nil
+				}
+			}
+			time.Sleep(1 * time.Second)
 		}
-		time.Sleep(1 * time.Second)
+		return err
+	}); tErr != nil {
+		// TODO: alert
+		log.GetSugger().Error("failed to confirm transaction ", "transaction", tx, "err", err)
 	}
-}
-
-func (s *service) updateStatus(ctx context.Context, transactionID string, status model.TransactionStatus) {
-	s.repo.UpdateTransactionStatus(ctx, transactionID, string(status))
 }
