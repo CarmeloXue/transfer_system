@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"main/common/log"
+	"main/common/recovery"
 	"main/common/utils"
 	"main/internal/account"
 	"main/model"
@@ -99,7 +100,7 @@ func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequ
 	defer cancel()
 	// Start from try
 	if tx.TransactionStatus == model.Pending || tx.TransactionStatus == model.Processing {
-		trxChan, err := s.processTransaction(tCtx, tx.TransactionID)
+		trxChan, err := s.processTransaction(tCtx, &tx)
 
 		select {
 		case tx, ok := <-trxChan:
@@ -133,6 +134,7 @@ func (s *service) processTransaction(ctx context.Context, transaction *model.Tra
 				transactionChan <- tx
 			}
 		}()
+		defer recovery.GoRecovery()
 
 		transaction.Retries = MaxRetry
 		if err != nil {
