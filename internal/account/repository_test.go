@@ -17,7 +17,7 @@ func prepareRepo() (AccountRepository, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.AutoMigrate(model.Account{})
+	_ = db.AutoMigrate(model.Account{})
 	return &repository{db}, nil
 }
 

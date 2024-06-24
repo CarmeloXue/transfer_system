@@ -26,9 +26,9 @@ func (s *transactionServiceSuite) SetupTest() {
 	s.accountDB, _ = testutils.SetupTestDB()
 	s.transactionDB, _ = testutils.SetupTestDB()
 
-	s.accountDB.AutoMigrate(model.Account{})
-	s.accountDB.AutoMigrate(model.FundMovement{})
-	s.transactionDB.AutoMigrate(model.Transaction{})
+	_ = s.accountDB.AutoMigrate(model.Account{})
+	_ = s.accountDB.AutoMigrate(model.FundMovement{})
+	_ = s.transactionDB.AutoMigrate(model.Transaction{})
 
 	accouts := []model.Account{
 		{
@@ -159,8 +159,8 @@ func (s *transactionServiceSuite) Test_Multiple_Create_Happyflow() {
 	)
 
 	for i := 0; i < 5; i++ {
-		service.CreateTransaction(ctx, req1To2Amount1)
-		service.CreateTransaction(ctx, req2To1Amount2)
+		_, _ = service.CreateTransaction(ctx, req1To2Amount1)
+		_, _ = service.CreateTransaction(ctx, req2To1Amount2)
 
 	}
 

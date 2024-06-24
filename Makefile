@@ -11,6 +11,7 @@ clean:
 	@rm -rf bin/*
 
 run:
+	@golangci-lint run
 	@docker-compose up --build
 
 down: 
@@ -18,3 +19,9 @@ down:
 
 clean-volume:
 	@docker volume rm transfer_system_db_data
+
+test:
+	@go test ./...
+
+lint:
+	@golangci-lint run

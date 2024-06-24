@@ -26,7 +26,7 @@ func initZapLogger() {
 		err error
 	)
 	if _, err = os.Stat(logDir); os.IsNotExist(err) {
-		os.MkdirAll(logDir, os.ModePerm)
+		_ = os.MkdirAll(logDir, os.ModePerm)
 	}
 
 	infoLogPath := filepath.Join(logDir, infoLog)
@@ -82,7 +82,7 @@ func GetSugger() *zap.SugaredLogger {
 // Cleanup closes the log files and syncs the logger.
 func Cleanup() {
 	if logger != nil {
-		logger.Sync()
+		_ = logger.Sync()
 	}
 	if infoFile != nil {
 		infoFile.Close()

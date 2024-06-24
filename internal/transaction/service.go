@@ -150,13 +150,13 @@ func (s *service) processTransaction(ctx context.Context, transactionID string) 
 			if errors.Is(err, context.DeadlineExceeded) {
 				s.retryCancel(ctx, &tx)
 			} else {
-				s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Failed)
+				_ = s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Failed)
 			}
 			return
 		}
 
 		if tx.TransactionStatus == model.Pending {
-			s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Processing)
+			_ = s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Processing)
 		}
 		s.retryConfirm(ctx, &tx)
 	}()
