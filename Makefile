@@ -15,3 +15,6 @@ run:
 
 down: 
 	@docker-compose down
+
+clean-volume:
+	@docker volume rm transfer_system_db_data

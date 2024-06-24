@@ -1,104 +1,105 @@
-# transfer_system
-A transfer system to allow account transfer between each other
+# Transfer System
 
-# How to start
+## Overview
 
+This transfer system facilitates financial transactions between accounts, ensuring data integrity and consistency using the TCC (Try-Confirm/Cancel) pattern. It is built with Docker Compose, using Nginx as a reverse proxy to direct requests to the appropriate service.
 
-# System Design
+## Setup
 
-Below is the system diagram of the transfer system. I have:
+### Prerequisites
 
-1. Nginx: This layer works as a reverse proxy to find corresponding upstream services. 
-2. Business application: There just one logical container(we can separate them, and make it easy to scale too) here, on this http server, I provided two services
-   1. AccountService: To handle account creation and query as well as account balance management. It will provide TCC functions to handle balance change in it's own transaction.
-   2. TransactionService: To hanlder transaction between accounts. It's more like a coordinator to trigger TCC functions from AccountService.
-3. Database: This layer used to store accounts and transactions. 
+- Docker
+- Docker Compose
 
-![Transfer System Architecture](/diagram.png)
+### Installation
 
+1. Clone the repository:
 
-## Databases
+   ```sh
+   git clone https://github.com/your-repo/transfer-system.git
+   cd transfer-system
+   ```
 
-I have two separate databases here, one for AccountService and one for TransactionService. The reason I put them in separate db is because in real world application, we may have db shardings, and we may not be able to do all the actions within one transaction within one db.
-
-1. `account_db`. It's used for AccountService, containing two tables:
-   1. `account_tab`. This table contains registered user's account information including balance.
-   2. `fund_movement-tab`. This table will record fund movement for a account and link the fund movement to it's parent transaction in transaction_db
-2. `transaction_db`. It's used for TransactionService to move the state of a fund transfer between two accounts.
-   1. `transaction_tab`. It's only table in this db. Recording all the transactions. Each transaction here will have(and only) two fund movement records in account_db.
-   
-
-## API
-
-### Account service
-
-##### AccountQuery
-
-```
- - Methods: Get
- - URL: /api/v1/accounts/{account_id}
- - Response: 
- {
-    "success": bool,
-    "error_code": uint32,
-    "error_message": string,
-    "data": {
-        "account": uint64,
-        "balance": string,
-    }
- }
-```
-
-##### AccountCreation
-
-```
- - Methods: Post
- - URL: /api/v1/accounts
- - Request body: 
- {
-    "account_id": uint64,
-    "initial_balance": string
- }
-
- - Response: 
- {
-    "success": bool,
-    "error_code": uint32,
-    "error_message": string,
-    "data": {
-        "account_id": uint64,
-        "balance": string,
-    }
- }
-```
+2. Start
+   ```sh
+   make run
+   ```
 
 
-### Transaction Service
+### Components
+1. **Nginx**: Acts as a reverse proxy, directing requests to the appropriate service.
+2. **Main API Service**: A single Golang server providing two main logical services:
+   - **Account Service**: Handles account creation, querying, and balance updates.
+   - **Transaction Service**: Manages transaction creation and ensures transactions reach their final status.
+3. **PostgreSQL**: Used as the database backend, with two databases:
+   - **account_db**: Contains `account_tab` and `fund_movement_tab`.
+   - **transaction_db**: Contains `transaction_tab`.
 
-##### Submit transfer
+### Database Schemas
 
+#### account_db
 
-```
- - Methods: Post
- - URL: /api/v1/payment
- - Request body: 
- {
-    "from": uint64,
-    "to": uint64,
-    "amount": float64,
- }
- 
- - Response: 
- {
-    "success": bool,
-    "error_code": uint32,
-    "error_message": string,
-    "data": {
-        "order_id": uint64,
-        "order_status": string,
-        "order_amount": float64,
-        "from": uint64,
-        "to": uint64
-    }
- }
+- **account_tab**
+  - `account_id` (INT, PRIMARY KEY)
+  - `balance` (DECIMAL)
+  - `created_at` (TIMESTAMP)
+  - `updated_at` (TIMESTAMP)
+
+- **fund_movement_tab**
+  - `id` (SERIAL, PRIMARY KEY)
+  - `transaction_id` (INT, UNIQUE)
+  - `direction` (VARCHAR)
+  - `source_account_id` (INT)
+  - `destination_account_id` (INT)
+  - `amount` (DECIMAL)
+  - `created_at` (TIMESTAMP)
+  - `updated_at` (TIMESTAMP)
+
+#### transaction_db
+
+- **transaction_tab**
+  - `transaction_id` (VARCHAR, UNIQUE, PRIMARY KEY)
+  - `source_account_id` (INT)
+  - `destination_account_id` (INT)
+  - `amount` (DECIMAL)
+  - `status` (VARCHAR)
+  - `created_at` (TIMESTAMP)
+  - `updated_at` (TIMESTAMP)
+
+### Flow Chart
+
+Below is a flow chart illustrating the high-level flow of the system:
+
+```plantuml
+@startuml
+
+package "nginx" {
+[Reverse Proxy]
+}
+
+package "Golang server" {
+ [Account Service]
+ [Transaction Service] 
+}
+
+database "postgresql" {
+  frame "account_db" {
+   [account_tab]
+   [fund_movement_tab]
+  }
+}
+
+database "postgresql" {
+  frame "transaction_db" {
+   [transaction_tab]
+  }
+}
+
+[Reverse Proxy] --> [Account Service]: "/api/v1/accounts"
+[Reverse Proxy] --> [Transaction Service]: "/api/v1/transaction"
+[Account Service] --> [account_db]: account create/query, account balance change
+[Transaction Service] --> [transaction_db]: transaction creation and push transaction status to goes to finail
+[Transaction Service] --> [Account Service]: Calling TCC api(function call) provided by account service 
+
+@enduml
 ```
