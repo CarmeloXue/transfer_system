@@ -206,4 +206,57 @@ Below are the status of the transaction:
 - Fulfiled. Transaction in Fulfiled status indicates destination account have been topped up. Service add exact amount to destination account. 
 - Refunded. Transaction in Refunded status indicates previous deducted amount have been add back to source account, and destination account have no balance change in within this transacion. In rare cases(like the destination exceed amount limit), we need to return amount deducted from source acount back to it.
 
+### Fund Movement Stage
+
+Fund movement table used to record fund changes status, and TCC relying on it to be idempotent. Fund movement record and balance change will be done with a transaction, to make sure every fund change is ovserveble. 
+
+- SourceOnHold. Indicates fund is deducted from source account. 
+- DestConfirmed. Indicates fund is added to destination account.
+- Refunded. Indicates fund return to source account.
+
 ### TCC
+
+Here is the transaction status diagram with TCC actions
+
+```plantuml
+@startuml
+
+[*] --> Start
+
+state Start {
+  state "Validation Failed" as ValidationFailed
+  state "Pending" as Pending
+  state "Failed" as Failed
+  state "Processing" as Processing
+  state "Fulfilled" as Fulfilled
+  state "Refunded" as Refunded
+  state "Manual Handling" as ManualHandling
+
+  Start --> ValidationFailed : Validation Failed\nReturn 400
+  Start --> Pending : Validation Success\nCreate Pending Transaction
+
+  Pending --> Failed : Try Failed
+  Pending --> Processing : Try Succeeded
+  Pending --> Cancel : Try Timeout
+
+  state Cancel {
+    [*] --> RetryCancel : Failed/Timeout < 5 times
+    RetryCancel --> ManualHandling : Failed/Timeout >= 5 times
+    RetryCancel --> CancelSucceeded : Cancel Succeeded
+    CancelSucceeded --> Failed : Empty Cancel
+    CancelSucceeded --> Refunded : Real Cancel
+  }
+
+  Processing --> Fulfilled : Confirm Succeeded
+  Processing --> RetryConfirm : Confirm Timeout/Failed < 5 times
+  RetryConfirm --> ManualHandling : Confirm Timeout/Failed >= 5 times
+  RetryConfirm --> Processing : Retry Confirm
+}
+
+@enduml
+```
+
+After TCC action success(or failed), we are going to change transaction status. Since they are two distributed db, chances are that transaction db update failed. In this case, we may need a reconsolation service, subscribe to fund movement change, and do accounting against transaction table, to make sure final data integrety. 
+
+Also I provided a Retry api, to retry transaction. Since TCC is idempotent, it's safe to retry the not finanlised transactions.
+

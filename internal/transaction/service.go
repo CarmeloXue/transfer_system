@@ -72,7 +72,7 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 		return model.Transaction{}, err
 	}
 
-	trxChan, err := s.processTransaction(tCtx, trx.TransactionID)
+	trxChan, err := s.processTransaction(tCtx, &trx)
 
 	select {
 	case tx, ok := <-trxChan:
@@ -115,50 +115,39 @@ func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequ
 	return tx, nil
 }
 
-func (s *service) processTransaction(ctx context.Context, transactionID string) (<-chan model.Transaction, error) {
-	tx, err := s.repo.GetTransactionByID(ctx, transactionID)
-	if err != nil {
-		log.GetSugger().Error("Failed to find transaction", "err", err)
+func (s *service) processTransaction(ctx context.Context, transaction *model.Transaction) (<-chan model.Transaction, error) {
+	var err error
+	if err = s.accountTCC.Try(ctx, transaction.TransactionID, transaction.SourceAccountID, transaction.DestinationAccountID, transaction.Amount); err != nil {
 		return nil, err
 	}
-
-	// Push to processing and call try in a same transaction
-	err = s.repo.Transaction(func(txn *gorm.DB) error {
-		if err = txn.Model(model.Transaction{}).Where("transaction_id = ?", tx.TransactionID).Update("transaction_status", model.Processing).Error; err != nil {
-			return err
-		}
-
-		if err = s.accountTCC.Try(ctx, tx.TransactionID, tx.SourceAccountID, tx.DestinationAccountID, tx.Amount); err != nil {
-			return err
-		}
-
-		return nil
-	})
+	if err = s.repo.UpdateTransactionStatus(ctx, transaction.TransactionID, model.Processing); err != nil {
+		return nil, err
+	}
 
 	transactionChan := make(chan model.Transaction)
 	go func() {
 		defer close(transactionChan)
 		defer func() {
-			tx, err := s.repo.GetTransactionByID(ctx, transactionID)
+			tx, err := s.repo.GetTransactionByID(ctx, transaction.TransactionID)
 			if err == nil {
 				transactionChan <- tx
 			}
 		}()
 
-		tx.Retries = MaxRetry
+		transaction.Retries = MaxRetry
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
-				s.retryCancel(ctx, &tx)
+				s.retryCancel(ctx, transaction)
 			} else {
-				_ = s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Failed)
+				_ = s.repo.UpdateTransactionStatus(ctx, transaction.TransactionID, model.Failed)
 			}
 			return
 		}
 
-		if tx.TransactionStatus == model.Pending {
-			_ = s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Processing)
+		if transaction.TransactionStatus == model.Pending {
+			_ = s.repo.UpdateTransactionStatus(ctx, transaction.TransactionID, model.Processing)
 		}
-		s.retryConfirm(ctx, &tx)
+		s.retryConfirm(ctx, transaction)
 	}()
 
 	return transactionChan, err
