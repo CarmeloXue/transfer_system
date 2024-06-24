@@ -24,6 +24,10 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 		return
 	}
 	if err := h.service.CreateAccount(c, req); err != nil {
+		if strings.Contains(err.Error(), "duplicate key") {
+			response.ErrorDuplicated(c, err.Error())
+			return
+		}
 		response.ErrorServer(c)
 		return
 	}
@@ -42,11 +46,7 @@ func (h *Handler) QueryAccount(c *gin.Context) {
 			response.ErrorNotFound(c)
 			return
 		}
-		if strings.Contains(err.Error(), "duplicate key") {
-			response.ErrorDuplicated(c, err.Error())
-		} else {
-			response.ErrorServer(c)
-		}
+		response.ErrorServer(c)
 		return
 	}
 	c.JSON(http.StatusOK, account)

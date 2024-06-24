@@ -21,7 +21,7 @@ func Err(c *gin.Context, err error) {
 	})
 }
 
-func ErrorParam(c *gin.Context,  errMsg string) {
+func ErrorParam(c *gin.Context, errMsg string) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"message": fmt.Sprintf("param error: %v", errMsg),
 		"data":    "",
@@ -37,7 +37,7 @@ func ErrorServer(c *gin.Context) {
 
 func ErrorDuplicated(c *gin.Context, message string) {
 	c.JSON(http.StatusConflict, gin.H{
-		"message": "server error",
+		"message": message,
 		"data":    "",
 	})
 }

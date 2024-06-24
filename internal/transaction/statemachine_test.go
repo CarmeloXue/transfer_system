@@ -62,6 +62,6 @@ func MiddleAction(ctx context.Context, txn *model.Transaction) (Event, error) {
 	}
 }
 func EndAction(ctx context.Context, txn *model.Transaction) (Event, error) {
-	time.Sleep(3)
+	time.Sleep(3) //nolint: staticcheck
 	return "", errors.New("End error")
 }
