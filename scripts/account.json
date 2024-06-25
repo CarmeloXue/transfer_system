@@ -1,14 +1,14 @@
 [
     {
-        "account_id": 123,
-        "initial_balance": "123123.1"
+        "account_id": 666,
+        "initial_balance": "123123.1 "
     },
     {
-        "account_id": 456,
-        "initial_balance": "456456.2"
+        "account_id": 777,
+        "initial_balance": " 456456.2"
     },
     {
-        "account_id": 789,
-        "initial_balance": "789789.3"
+        "account_id": 888,
+        "initial_balance": " 789789.3"
     }
 ]
