@@ -30,6 +30,9 @@ This transfer system facilitates financial transactions between accounts, ensuri
   
 4. The application should now be running and listening to port `8081`, with Nginx proxying requests to the appropriate services.
 
+5. There is a `create_accounts.sh` under `scripts` folder, after service started, you can use it to create users. It will use the data in `account.json`.
+You may need to run `chmod +x create_accounts.sh` to have execution permission
+
 
 ## Usage
 
@@ -37,7 +40,7 @@ This transfer system facilitates financial transactions between accounts, ensuri
 
 Users can make free transfer between each other with valid amount, and user can have pending transactions.
 
-When user make transfer, I'll deduct from his account first, this means he will see he's amount changed, even before transaction fulfil. 
+I'm using int64 to save balance, so there is a balance limit there. When I user make transfer, I'll make sure both side can send/recieve successfully
 
 #### Amount check
 

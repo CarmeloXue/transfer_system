@@ -119,8 +119,7 @@ func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequ
 }
 
 func (s *service) processTransaction(ctx context.Context, transaction *model.Transaction) (<-chan model.Transaction, error) {
-	var err error
-	err = s.tryWithTimeout(ctx, transaction)
+	err := s.tryWithTimeout(ctx, transaction)
 	transactionChan := make(chan model.Transaction)
 	go func() {
 		defer close(transactionChan)
