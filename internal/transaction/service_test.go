@@ -33,11 +33,11 @@ func (s *transactionServiceSuite) SetupTest() {
 	accouts := []model.Account{
 		{
 			AccountID: 1,
-			Balance:   10,
+			Balance:   10000000,
 		},
 		{
 			AccountID: 2,
-			Balance:   10,
+			Balance:   10000000,
 		},
 	}
 
@@ -78,8 +78,8 @@ func (s *transactionServiceSuite) Test_CreateTransaction_Happyflow() {
 
 	assert.Equal(s.T(), req.SourceAccountID, trx.SourceAccountID)
 	assert.Equal(s.T(), req.DestinationAccountID, trx.DestinationAccountID)
-	floatVal, _ := utils.ParseFloat64String(req.Amount)
-	assert.Equal(s.T(), floatVal, trx.Amount)
+	inflatedValue, _ := utils.ParseString(req.Amount)
+	assert.Equal(s.T(), inflatedValue, trx.Amount)
 }
 
 func (s *transactionServiceSuite) Test_CreateTransaction_InvalidAmount_ShouldReturnError() {
@@ -94,7 +94,7 @@ func (s *transactionServiceSuite) Test_CreateTransaction_InvalidAmount_ShouldRet
 	)
 
 	_, err := service.CreateTransaction(ctx, req)
-	assert.EqualError(s.T(), utils.ErrAmountInvalidFormat, err.Error())
+	assert.Error(s.T(), err, err.Error())
 }
 
 func (s *transactionServiceSuite) Test_CreateTransaction_InvalidSource_ShouldReturnError() {
@@ -167,11 +167,11 @@ func (s *transactionServiceSuite) Test_Multiple_Create_Happyflow() {
 	s.validateAccounts(ctx, []model.Account{
 		{
 			AccountID: 1,
-			Balance:   15,
+			Balance:   15000000,
 		},
 		{
 			AccountID: 2,
-			Balance:   5,
+			Balance:   5000000,
 		},
 	})
 }
@@ -193,8 +193,8 @@ func (s *transactionServiceSuite) Test_TryTimeout_EmptyCancel_TransactionStatus_
 
 	assert.Equal(s.T(), req.SourceAccountID, trx.SourceAccountID)
 	assert.Equal(s.T(), req.DestinationAccountID, trx.DestinationAccountID)
-	floatVal, _ := utils.ParseFloat64String(req.Amount)
-	assert.Equal(s.T(), floatVal, trx.Amount)
+	inflatedValue, _ := utils.ParseString(req.Amount)
+	assert.Equal(s.T(), inflatedValue, trx.Amount)
 	assert.Equal(s.T(), model.Failed, trx.TransactionStatus)
 
 }

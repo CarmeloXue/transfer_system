@@ -1,6 +1,5 @@
 package account
 
-
 type (
 	CreateAccountRequest struct {
 		AccountID      uint64 `json:"account_id" binding:"required"`

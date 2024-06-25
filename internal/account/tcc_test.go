@@ -14,8 +14,9 @@ import (
 
 type tccSuite struct {
 	suite.Suite
-	mockDB     *gorm.DB
-	repository AccountRepository
+	mockDB          *gorm.DB
+	repository      AccountRepository
+	defaultAccounts []Account
 }
 
 func (s *tccSuite) SetupTest() {
@@ -23,6 +24,18 @@ func (s *tccSuite) SetupTest() {
 	_ = s.mockDB.AutoMigrate(FundMovement{})
 	_ = s.mockDB.AutoMigrate(Account{})
 	s.repository = NewRepository(s.mockDB)
+
+	s.defaultAccounts = []Account{
+		{
+			AccountID: 1,
+			Balance:   100000000, // inflated amount
+		},
+		{
+			AccountID: 2,
+			Balance:   100000000,
+		},
+	}
+	s.prepareAccounts(s.defaultAccounts)
 }
 
 func (s *tccSuite) TearDownTest() {
@@ -43,27 +56,16 @@ func (s *tccSuite) prepareAccounts(accounts []Account) {
 
 func (s *tccSuite) Test_Try_Happyflow() {
 	var (
-		accounts = []Account{
-			{
-				AccountID: 10,
-				Balance:   100.0,
-			},
-			{
-				AccountID: 29,
-				Balance:   100.0,
-			},
-		}
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
 		trx = Transaction{
 			TransactionID:        "123",
-			SourceAccountID:      10,
-			DestinationAccountID: 29,
-			Amount:               100.0,
+			SourceAccountID:      1,
+			DestinationAccountID: 22,
+			Amount:               100000000,
 		}
 		err error
 	)
-	s.prepareAccounts(accounts)
 
 	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
 	assert.NoError(s.T(), err)
@@ -83,27 +85,16 @@ func (s *tccSuite) Test_Try_Happyflow() {
 
 func (s *tccSuite) Test_Try_Insufficient_Should_ReturnError() {
 	var (
-		accounts = []Account{
-			{
-				AccountID: 1,
-				Balance:   100.0,
-			},
-			{
-				AccountID: 2,
-				Balance:   100.0,
-			},
-		}
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
 		trx = Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
-			Amount:               200.0,
+			Amount:               2000000000000000000,
 		}
 		err error
 	)
-	s.prepareAccounts(accounts)
 
 	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
 	assert.EqualError(s.T(), ErrInsufficientBalance, err.Error())
@@ -111,16 +102,6 @@ func (s *tccSuite) Test_Try_Insufficient_Should_ReturnError() {
 
 func (s *tccSuite) Test_Confirm_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
 	var (
-		accounts = []Account{
-			{
-				AccountID: 1,
-				Balance:   100.0,
-			},
-			{
-				AccountID: 2,
-				Balance:   100.0,
-			},
-		}
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
 		trx = Transaction{
@@ -132,8 +113,6 @@ func (s *tccSuite) Test_Confirm_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
 		err error
 	)
 
-	s.prepareAccounts(accounts)
-
 	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
 	assert.NoError(s.T(), err)
 
@@ -146,14 +125,14 @@ func (s *tccSuite) Test_Confirm_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
 	err = tcc.Confirm(ctx, trx.TransactionID)
 	assert.NoError(s.T(), err)
 
-	accounts = []Account{
+	accounts := []Account{
 		{
 			AccountID: 1,
-			Balance:   0,
+			Balance:   99999900,
 		},
 		{
 			AccountID: 2,
-			Balance:   200.0,
+			Balance:   100000100,
 		},
 	}
 
@@ -162,16 +141,6 @@ func (s *tccSuite) Test_Confirm_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
 
 func (s *tccSuite) Test_Cancel_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
 	var (
-		accounts = []Account{
-			{
-				AccountID: 1,
-				Balance:   100.0,
-			},
-			{
-				AccountID: 2,
-				Balance:   100.0,
-			},
-		}
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
 		trx = Transaction{
@@ -182,8 +151,6 @@ func (s *tccSuite) Test_Cancel_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
 		}
 		err error
 	)
-
-	s.prepareAccounts(accounts)
 
 	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
 	assert.NoError(s.T(), err)
@@ -197,43 +164,21 @@ func (s *tccSuite) Test_Cancel_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
 	err = tcc.Cancel(ctx, trx.TransactionID)
 	assert.NoError(s.T(), err)
 
-	accounts = []Account{
-		{
-			AccountID: 1,
-			Balance:   100,
-		},
-		{
-			AccountID: 2,
-			Balance:   100.0,
-		},
-	}
-
-	s.validateAccounts(ctx, accounts)
+	s.validateAccounts(ctx, s.defaultAccounts)
 }
 
 func (s *tccSuite) Test_TryConfirm_HappyFlow() {
 	var (
-		accounts = []Account{
-			{
-				AccountID: 1,
-				Balance:   100.0,
-			},
-			{
-				AccountID: 2,
-				Balance:   100.0,
-			},
-		}
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
 		trx = Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
-			Amount:               100.0,
+			Amount:               100,
 		}
 		err error
 	)
-	s.prepareAccounts(accounts)
 
 	_ = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
 	err = tcc.Confirm(ctx, trx.TransactionID)
@@ -248,11 +193,11 @@ func (s *tccSuite) Test_TryConfirm_HappyFlow() {
 	expectedAccs := []Account{
 		{
 			AccountID: 1,
-			Balance:   0,
+			Balance:   99999900,
 		},
 		{
 			AccountID: 2,
-			Balance:   200.0,
+			Balance:   100000100,
 		},
 	}
 	s.validateAccounts(ctx, expectedAccs)
@@ -260,16 +205,6 @@ func (s *tccSuite) Test_TryConfirm_HappyFlow() {
 
 func (s *tccSuite) Test_TryCancel_HappyFlow() {
 	var (
-		accounts = []Account{
-			{
-				AccountID: 1,
-				Balance:   100.0,
-			},
-			{
-				AccountID: 2,
-				Balance:   100.0,
-			},
-		}
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
 		trx = Transaction{
@@ -280,7 +215,6 @@ func (s *tccSuite) Test_TryCancel_HappyFlow() {
 		}
 		err error
 	)
-	s.prepareAccounts(accounts)
 
 	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
 	assert.NoError(s.T(), err)
@@ -292,31 +226,12 @@ func (s *tccSuite) Test_TryCancel_HappyFlow() {
 	})
 	assert.NoError(s.T(), err)
 	s.validateFundMovement(rollback, trx, FMStageRollbacked)
-	expectedAccs := []Account{
-		{
-			AccountID: 1,
-			Balance:   100.0,
-		},
-		{
-			AccountID: 2,
-			Balance:   100.0,
-		},
-	}
-	s.validateAccounts(ctx, expectedAccs)
+
+	s.validateAccounts(ctx, s.defaultAccounts)
 }
 
 func (s *tccSuite) Test_EmptyCancel_ShouldSuccess() {
 	var (
-		accounts = []Account{
-			{
-				AccountID: 1,
-				Balance:   100.0,
-			},
-			{
-				AccountID: 2,
-				Balance:   100.0,
-			},
-		}
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
 		trx = Transaction{
@@ -327,7 +242,6 @@ func (s *tccSuite) Test_EmptyCancel_ShouldSuccess() {
 		}
 		err error
 	)
-	s.prepareAccounts(accounts)
 	err = tcc.Cancel(ctx, trx.TransactionID)
 	assert.EqualError(s.T(), ErrEmptyRollback, err.Error())
 	var rollback FundMovement
@@ -335,24 +249,14 @@ func (s *tccSuite) Test_EmptyCancel_ShouldSuccess() {
 		TransactionID: trx.TransactionID,
 	}).Error
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), float64(0), rollback.Amount)
+	assert.Equal(s.T(), int64(0), rollback.Amount)
 	assert.Equal(s.T(), FMStageRollbacked, rollback.Stage)
 
-	s.validateAccounts(ctx, accounts)
+	s.validateAccounts(ctx, s.defaultAccounts)
 }
 
 func (s *tccSuite) Test_Try_Cancel_Confirm() {
 	var (
-		accounts = []Account{
-			{
-				AccountID: 1,
-				Balance:   100.0,
-			},
-			{
-				AccountID: 2,
-				Balance:   100.0,
-			},
-		}
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
 		trx = Transaction{
@@ -363,7 +267,6 @@ func (s *tccSuite) Test_Try_Cancel_Confirm() {
 		}
 		err error
 	)
-	s.prepareAccounts(accounts)
 
 	err = tcc.Try(ctx, trx.TransactionID, trx.SourceAccountID, trx.DestinationAccountID, trx.Amount)
 	assert.NoError(s.T(), err)
@@ -379,21 +282,11 @@ func (s *tccSuite) Test_Try_Cancel_Confirm() {
 	assert.NotNil(s.T(), refund)
 	s.validateFundMovement(refund, trx, FMStageRollbacked)
 
-	s.validateAccounts(ctx, accounts)
+	s.validateAccounts(ctx, s.defaultAccounts)
 }
 
 func (s *tccSuite) Test_Cancel_Try() {
 	var (
-		accounts = []Account{
-			{
-				AccountID: 1,
-				Balance:   100.0,
-			},
-			{
-				AccountID: 2,
-				Balance:   100.0,
-			},
-		}
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
 		trx = Transaction{
@@ -404,7 +297,6 @@ func (s *tccSuite) Test_Cancel_Try() {
 		}
 		err error
 	)
-	s.prepareAccounts(accounts)
 
 	err = tcc.Cancel(ctx, trx.TransactionID)
 	assert.EqualError(s.T(), ErrEmptyRollback, err.Error())
@@ -416,9 +308,9 @@ func (s *tccSuite) Test_Cancel_Try() {
 	})
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), refund)
-	assert.Equal(s.T(), float64(0), refund.Amount)
+	assert.Equal(s.T(), int64(0), refund.Amount)
 	assert.Equal(s.T(), FMStageRollbacked, refund.Stage)
-	s.validateAccounts(ctx, accounts)
+	s.validateAccounts(ctx, s.defaultAccounts)
 }
 
 func (s *tccSuite) validateFundMovement(fm *FundMovement, trx Transaction, stage FundMovementStage) {

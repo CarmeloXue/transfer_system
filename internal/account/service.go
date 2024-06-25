@@ -39,7 +39,7 @@ func NewAccountService(db *gorm.DB) *accountService {
 }
 
 func (s *accountService) CreateAccount(ctx context.Context, req CreateAccountRequest) error {
-	floatValue, err := utils.ParseFloat64String(req.InitialBalance)
+	inflatedValue, err := utils.ParseString(req.InitialBalance)
 	if err != nil {
 		log.GetLogger().Error(err.Error())
 		return err
@@ -47,7 +47,7 @@ func (s *accountService) CreateAccount(ctx context.Context, req CreateAccountReq
 
 	err = s.repo.CreateAccount(ctx, &Account{
 		AccountID: int(req.AccountID),
-		Balance:   floatValue,
+		Balance:   inflatedValue,
 	})
 	if err != nil {
 		log.GetLogger().Error(err.Error())

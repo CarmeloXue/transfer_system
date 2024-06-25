@@ -16,7 +16,7 @@ type FundMovement struct {
 	Stage                FundMovementStage `gorm:"column:stage" json:"stage"`
 	SourceAccountID      int               `gorm:"column:source_account_id" json:"source_account_id"`
 	DestinationAccountID int               `gorm:"column:destination_account_id" json:"destination_account_id"`
-	Amount               float64           `gorm:"column:amount" json:"amount"`
+	Amount               int64             `gorm:"column:amount" json:"amount"`
 	CreatedAt            time.Time         `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt            time.Time         `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
@@ -29,7 +29,7 @@ func (FundMovement) TableName() string {
 type Account struct {
 	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
 	AccountID int       `gorm:"unique;not null" json:"account_id"`
-	Balance   float64   `gorm:"type:decimal(20,8);not null;default:0" json:"balance"`
+	Balance   int64     `gorm:"bigint;not null;default:0" json:"balance"`
 	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }

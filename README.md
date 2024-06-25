@@ -33,6 +33,14 @@ This transfer system facilitates financial transactions between accounts, ensuri
 
 ## Usage
 
+### Assumptions
+
+#### Amount check
+
+ - Allow input string with maximum 6 decimal digits
+ - Inside system, I inflate float value by 100000 and used to do calculation
+ - When return amount to user, will deflate by 100000
+
 ### Account Service Endpoints
 
 - ***Create Account***

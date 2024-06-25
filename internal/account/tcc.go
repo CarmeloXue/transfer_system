@@ -26,10 +26,11 @@ var (
 	ErrConfirmed                     = errors.New("confirmed")
 	ErrFailedToRollback              = errors.New("failed to rollback")
 	ErrEmptyRollback                 = errors.New("empty rollback")
+	ErrUnknowStage                   = errors.New("unknow fund movement status")
 )
 
 type TCC interface {
-	Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount float64) error
+	Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount int64) error
 
 	Confirm(ctx context.Context, transactionID string) error
 
@@ -50,7 +51,7 @@ func NewTCCService(db *gorm.DB) TCC {
  * nil error indicates fund movement is SourceOnHold, and source account is deducted.
  * ErrRollbacked indicates there already an emtpy rollback or real rollback.
  * */
-func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount float64) error {
+func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount int64) error {
 	var (
 		logger = log.GetSugger()
 	)
@@ -126,15 +127,18 @@ func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
 			logger.Error("failed to get fund movement status", "err", err)
 			return err
 		}
-
-		if destConfirmed.Stage == FMStageDestConfirmd {
+		switch destConfirmed.Stage {
+		case FMStageDestConfirmd:
 			return nil
-		}
-
-		if destConfirmed.Stage == FMStageRollbacked {
+		case FMStageRollbacked:
 			logger.Error("fund movement already rolledbacked")
 			return ErrRollbacked
+		case FMStageSourceOnHold:
+			break
+		default:
+			return ErrUnknowStage
 		}
+		// only move fund when FM is on hold
 		if err = tx.Model(FundMovement{}).Where("transaction_id = ?", destConfirmed.TransactionID).Update("stage", FMStageDestConfirmd).Error; err != nil {
 			return ErrFMFailedToMoveDestConfirmed
 		}
@@ -142,7 +146,6 @@ func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
 		if err = updateAccountBalance(tx, destConfirmed.DestinationAccountID, destConfirmed.Amount); err != nil {
 			return err
 		}
-
 		return nil
 	})
 }
@@ -185,12 +188,15 @@ func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 			return err
 		}
 
-		if rollback.Stage == FMStageDestConfirmd {
+		switch rollback.Stage {
+		case FMStageDestConfirmd:
 			return ErrConfirmed
-		}
-
-		if rollback.Stage == FMStageRollbacked {
+		case FMStageRollbacked:
 			return nil
+		case FMStageSourceOnHold:
+			break
+		default:
+			return ErrUnknowStage
 		}
 
 		// Create refund fund movement
@@ -201,7 +207,6 @@ func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 		if err := updateAccountBalance(tx, rollback.SourceAccountID, rollback.Amount); err != nil {
 			return err
 		}
-
 		return nil
 	})
 	// Empty rollback
@@ -211,7 +216,7 @@ func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 	return txErr
 }
 
-func updateAccountBalance(tx *gorm.DB, accountID int, amount float64) error {
+func updateAccountBalance(tx *gorm.DB, accountID int, amount int64) error {
 	// Deduct user's balance
 	account := Account{}
 	if err := tx.First(&account, Account{

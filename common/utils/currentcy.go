@@ -1,0 +1,71 @@
+package utils
+
+import (
+	"errors"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+)
+
+var (
+	ErrOverflow      = errors.New("amount overflow")
+	ErrTooManyDigits = errors.New("too many digits. only 6 digit allowed")
+)
+
+// ParseString parses a string into an int64, allowing up to 6 digits after the decimal point.
+func ParseString(s string) (int64, error) {
+	// Check if the string has a decimal point
+	parts := strings.Split(s, ".")
+	if len(parts) == 2 {
+		if len(parts[1]) > 6 {
+			return 0, ErrTooManyDigits
+		}
+	}
+
+	// Parse the float value
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	// Scale the float to an int64
+	result := int64(f * 1e6)
+	return result, nil
+}
+
+// ParseFloat parses a float64 into an int64, allowing up to 6 digits after the decimal point.
+func ParseFloat(f float64) (int64, error) {
+	s := fmt.Sprintf("%.6f", f)
+
+	parsedValue, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, err
+	}
+	if parsedValue != f {
+		return 0, ErrTooManyDigits
+	}
+	parts := strings.Split(s, ".")
+	if len(parts) == 2 {
+		if len(parts[1]) > 6 {
+			return 0, ErrTooManyDigits
+		}
+	}
+
+	// Scale the float to an int64
+	result := int64(f * 1e6)
+	return result, nil
+}
+
+// FormatInt formats an int64 to a float string with 6 digits after the decimal point.
+func FormatInt(i int64) string {
+	return fmt.Sprintf("%.6f", float64(i)/1e6)
+}
+
+// SafeAdd safely adds two int64 values, checking for overflow.
+func SafeAdd(a, b int64) (int64, error) {
+	if (b > 0 && a > math.MaxInt64-b) || (b < 0 && a < math.MinInt64-b) {
+		return 0, ErrOverflow
+	}
+	return a + b, nil
+}

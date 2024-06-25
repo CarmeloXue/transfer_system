@@ -23,6 +23,7 @@ func (h *Handler) CreateTransaction(c *gin.Context) {
 		return
 	}
 	trx, err := h.service.CreateTransaction(c, req)
+	(&trx).FormatForDisplay()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": err.Error(),
@@ -40,6 +41,7 @@ func (h *Handler) QueryTransaction(c *gin.Context) {
 		return
 	}
 	trx, err := h.service.QueryTransaction(c, req)
+	(&trx).FormatForDisplay()
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			response.ErrorNotFound(c)
@@ -58,6 +60,7 @@ func (h *Handler) RetryTransaction(c *gin.Context) {
 		return
 	}
 	trx, err := h.service.RetryTransaction(c, req)
+	(&trx).FormatForDisplay()
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			response.ErrorNotFound(c)

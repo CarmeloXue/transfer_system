@@ -47,7 +47,7 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 	if req.DestinationAccountID == req.SourceAccountID {
 		return model.Transaction{}, ErrSameAccountTransactions
 	}
-	float64Value, err := utils.ParseFloat64String(req.Amount)
+	inflatedValue, err := utils.ParseString(req.Amount)
 	if err != nil {
 		return model.Transaction{}, err
 	}
@@ -63,7 +63,7 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 	trx := model.Transaction{
 		SourceAccountID:      req.SourceAccountID,
 		DestinationAccountID: req.DestinationAccountID,
-		Amount:               float64Value,
+		Amount:               inflatedValue,
 		TransactionID:        utils.GenerateTransactionID(),
 		TransactionStatus:    model.Pending,
 	}
@@ -142,9 +142,8 @@ func (s *service) processTransaction(ctx context.Context, transaction *model.Tra
 			return
 		}
 
-		if transaction.TransactionStatus == model.Pending {
-			_ = s.repo.UpdateTransactionStatus(ctx, transaction.TransactionID, model.Processing)
-		}
+		_ = s.repo.UpdateTransactionStatus(ctx, transaction.TransactionID, model.Processing)
+
 		s.retryConfirm(ctx, transaction)
 	}()
 
@@ -189,7 +188,7 @@ func (s *service) retryConfirm(ctx context.Context, tx *model.Transaction) {
 					return nil
 				}
 			}
-			time.Sleep(1 * time.Second)
+			// time.Sleep(1 * time.Second)
 		}
 		return err
 	}); tErr != nil {

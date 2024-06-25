@@ -2,6 +2,7 @@ package account
 
 import (
 	"main/common/response"
+	"main/common/utils"
 	"net/http"
 	"strings"
 
@@ -49,5 +50,9 @@ func (h *Handler) QueryAccount(c *gin.Context) {
 		response.ErrorServer(c)
 		return
 	}
-	c.JSON(http.StatusOK, account)
+	displayAccount := QueryResponse{
+		AccountID: uint64(account.AccountID),
+		Balance:   utils.FormatInt(account.Balance),
+	}
+	response.Ok(c, displayAccount)
 }

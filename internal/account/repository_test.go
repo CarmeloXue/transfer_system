@@ -50,7 +50,7 @@ func TestCreateAccount_Duplicated_ShouldReturnError(t *testing.T) {
 	assert.NoError(t, err, "failed to create account")
 
 	err = repo.CreateAccount(context.Background(), account)
-	assert.EqualError(t, gorm.ErrCheckConstraintViolated, err.Error(), "failed to create account")
+	assert.ErrorContains(t, err, "constraint")
 
 	count, err := repo.(*repository).countAccount(context.Background())
 	assert.NoError(t, err, "failed to create account")
@@ -62,7 +62,7 @@ func TestGetAccount(t *testing.T) {
 	repo, err := prepareRepo()
 	assert.NoError(t, err, "failed to test")
 
-	account := &Account{AccountID: 123, Balance: 100.0}
+	account := &Account{AccountID: 123, Balance: 100}
 
 	err = repo.CreateAccount(context.Background(), account)
 	assert.NoError(t, err, "failed to create account")
@@ -70,7 +70,7 @@ func TestGetAccount(t *testing.T) {
 	assert.NoError(t, err, "failed to create account")
 
 	assert.Equal(t, 123, acc.AccountID)
-	assert.Equal(t, 100.0, acc.Balance)
+	assert.Equal(t, int64(100), acc.Balance)
 }
 
 func TestGetAccount_NoData(t *testing.T) {

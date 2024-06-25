@@ -22,7 +22,7 @@ func (s *mockTCC) SetTimeout(try, confirm, cancel bool) {
 	s.canceltimeout = cancel
 }
 
-func (s *mockTCC) Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount float64) error {
+func (s *mockTCC) Try(ctx context.Context, transactionID string, sourceAccountID, destinationAccountID int, amount int64) error {
 	if s.tryTimeout {
 		return context.DeadlineExceeded
 	}
