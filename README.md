@@ -35,11 +35,18 @@ This transfer system facilitates financial transactions between accounts, ensuri
 
 ### Assumptions
 
+Users can make free transfer between each other with valid amount, and user can have pending transactions.
+
+When user make transfer, I'll deduct from his account first, this means he will see he's amount changed, even before transaction fulfil. 
+
 #### Amount check
 
  - Allow input string with maximum 6 decimal digits
  - Inside system, I inflate float value by 100000 and used to do calculation
  - When return amount to user, will deflate by 100000
+
+ But this will bring one issue, cos I save amount in int64 in golang. So there will be a case destination account cannot add a certain amount due to exceed limit.
+ The flow will be Try(deduct from user success) -> Confirm(add to user failed). In current design, I have to manually refund to source user(And this somehow violate TCC rules).
 
 ### Account Service Endpoints
 
@@ -79,10 +86,10 @@ This transfer system facilitates financial transactions between accounts, ensuri
   ***Response Body***
   ```json
   {
-    message: "",
-    data: {
-      account_id: 123,
-      balance: "100.23344"
+    "message": "",
+    "data": {
+      "account_id": 123,
+      "balance": "100.23344"
     }
   }
   ```
@@ -97,9 +104,9 @@ This transfer system facilitates financial transactions between accounts, ensuri
   ***Request Body***
   ```json
   {
-    source_account_id: 123,       // required
-    destination_account_id: 456,  // required
-    amount: "100.12345"           // required 
+    "source_account_id": 123,       // required
+    "destination_account_id": 456,  // required
+    "amount": "100.12345"           // required 
   }
   ```
  
@@ -111,15 +118,15 @@ This transfer system facilitates financial transactions between accounts, ensuri
   ***Response Body***
   ```json
   {
-    message: "success",
-    data: {
-      transaction_id: "transaction-uuid",
-      source_account_id: 123,
-      destination_account_id: 456,
-      amount: "100.12345",
-      status: "fulfiled",
-      created_at: "2024-06-24T03:44:11.816787Z",
-      updated_at: "2024-06-24T03:44:11.833955Z",
+    "message": "success",
+    "data": {
+      "transaction_id": "transaction-uuid",
+      "source_account_id": 123,
+      "destination_account_id": 456,
+      "amount": "100.12345",
+      "status": "fulfiled",
+      "created_at": "2024-06-24T03:44:11.816787Z",
+      "updated_at": "2024-06-24T03:44:11.833955Z",
     }
   }
 
