@@ -48,8 +48,6 @@ I'm using int64 to save balance, so there is a balance limit there. When I user 
  - Inside system, I inflate float value by 100000 and used to do calculation
  - When return amount to user, will deflate by 100000
 
- But this will bring one issue, cos I save amount in int64 in golang. So there will be a case destination account cannot add a certain amount due to exceed limit.
- The flow will be Try(deduct from user success) -> Confirm(add to user failed). In current design, I have to manually refund to source user(And this somehow violate TCC rules).
 
 ### Account Service Endpoints
 
