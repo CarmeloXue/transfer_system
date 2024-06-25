@@ -33,9 +33,11 @@ func TestParseString(t *testing.T) {
 		result int64
 		err    error
 	}{
-		{"1.123456", 1123456, nil},
+		{"1.123456 ", 1123456, nil},
 		{"123456", 123456000000, nil},
-		{"1.1234567", 0, ErrTooManyDigits},
+		{" 123456", 123456000000, nil},
+		{" 123456    ", 123456000000, nil},
+		{" 1.1234567 ", 0, ErrTooManyDigits},
 		{"abc", 0, fmt.Errorf("strconv.ParseFloat: parsing \"abc\": invalid syntax")},
 	}
 

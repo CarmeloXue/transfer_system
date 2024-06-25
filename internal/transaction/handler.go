@@ -2,7 +2,6 @@ package transaction
 
 import (
 	"main/common/response"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -25,10 +24,7 @@ func (h *Handler) CreateTransaction(c *gin.Context) {
 	trx, err := h.service.CreateTransaction(c, req)
 	(&trx).FormatForDisplay()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": err.Error(),
-			"data":    trx,
-		})
+		response.ErrorParam(c, err.Error())
 		return
 	}
 	response.Ok(c, trx)

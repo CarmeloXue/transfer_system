@@ -28,7 +28,7 @@ This transfer system facilitates financial transactions between accounts, ensuri
    make run
    ```
   
-4. The application should now be running, with Nginx proxying requests to the appropriate services.
+4. The application should now be running and listening to port `8081`, with Nginx proxying requests to the appropriate services.
 
 
 ## Usage
@@ -145,10 +145,16 @@ When user make transfer, I'll deduct from his account first, this means he will 
 
 #### account_db
 
+For Account_tab. I maintained
+ - `balance` to hold user's real balance
+ - `in_balance` to hold the whole amount going to transfer in
+ - `out_balance` to hold the whole aount going to transfer out
 - **account_tab**
   - `id` (SERIAL, PRIMARY KEY)
   - `account_id` (INT, UNIQUE)
-  - `balance` (DECIMAL)
+  - `balance` (BIGINT) 
+  - `in_balance` (BIGINT)
+  - `out_balance` (BIGINT)
   - `created_at` (TIMESTAMP)
   - `updated_at` (TIMESTAMP)
 
@@ -217,9 +223,9 @@ database "postgresql" {
 Below are the status of the transaction:
 
 - Pending. Transacion in pending status will not have any fund changes in any account. A pending transaction means all users are valid and the transaction can be made when service recieve this request based on user's balance. 
-- Processing. Transaction in pending status indicates source account have been deducted. Service start to deduct exact amount from source account. 
-- Fulfiled. Transaction in Fulfiled status indicates destination account have been topped up. Service add exact amount to destination account. 
-- Failed. Transaction in Refunded status indicates previous tried, but the try action timeout in CreateTransaction api, so I'll call Cancel, to cancel the tried
+- Processing. Transaction in processing status indicates both account have tried to send/recieve fund. 
+- Fulfiled. Transaction in Fulfiled status indicates source balance have been deduct and destination balance have been added. 
+- Failed. Transaction in Failed status indicates fund was never moved successfully, it can be request validation failed, or try timeout.
 
 ### Fund Movement Stage
 
@@ -231,7 +237,11 @@ Fund movement table used to record fund changes status, and TCC relying on it to
 
 ### TCC
 
-Here is the transaction status diagram with TCC actions
+Here is the transaction status diagram with TCC actions. Basic rules are:
+
+- Try. In try will verify on both side, if sender is able to send and reciever is able to recieve. If try success, will garantee Confirm will be success. If try timeout, should call Cancel.
+- Confirm. Only successed Try will trigger Confirm, in Confirm, will modifiy user's balance as well as on hold amount(`in_balance`/`out_balance`).
+- Cancel. Only call cancel when Try is timeout. In this case, Transaction service is not sure if Account Service Try sucess or not. So to keep it safe, just call Cancel.
 
 ```plantuml
 @startuml
@@ -244,7 +254,6 @@ state Start {
   state "Failed" as Failed
   state "Processing" as Processing
   state "Fulfilled" as Fulfilled
-  state "Refunded" as Refunded
   state "Manual Handling" as ManualHandling
 
   Start --> ValidationFailed : Validation Failed\nReturn 400
@@ -259,7 +268,6 @@ state Start {
     RetryCancel --> ManualHandling : Failed/Timeout >= 5 times
     RetryCancel --> CancelSucceeded : Cancel Succeeded
     CancelSucceeded --> Failed : Empty Cancel
-    CancelSucceeded --> Refunded : Real Cancel
   }
 
   Processing --> Fulfilled : Confirm Succeeded

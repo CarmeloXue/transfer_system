@@ -16,6 +16,7 @@ var (
 
 // ParseString parses a string into an int64, allowing up to 6 digits after the decimal point.
 func ParseString(s string) (int64, error) {
+	s = strings.Trim(s, " ")
 	// Check if the string has a decimal point
 	parts := strings.Split(s, ".")
 	if len(parts) == 2 {

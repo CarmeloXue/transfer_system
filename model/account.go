@@ -56,7 +56,7 @@ func (a *Account) TryTransfer(tx *gorm.DB, amount int64) error {
 	if err != nil {
 		return err
 	}
-	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).Update("out_balance", outBalance).Error
+	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).Updates(map[string]interface{}{"out_balance": outBalance}).Error
 }
 
 func (a *Account) Transfer(tx *gorm.DB, amount int64) error {
@@ -73,9 +73,9 @@ func (a *Account) Transfer(tx *gorm.DB, amount int64) error {
 	if err != nil {
 		return err
 	}
-	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).UpdateColumns(Account{
-		Balance:    balance,
-		OutBalance: outBalance,
+	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).Updates(map[string]interface{}{
+		"balance":     balance,
+		"out_balance": outBalance,
 	}).Error
 }
 
@@ -89,7 +89,7 @@ func (a *Account) TryReceive(tx *gorm.DB, amount int64) error {
 	if err != nil {
 		return err
 	}
-	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).Update("in_balance", inBalance).Error
+	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).Updates(map[string]interface{}{"in_balance": inBalance}).Error
 }
 
 func (a *Account) Recieve(tx *gorm.DB, amount int64) error {
@@ -106,9 +106,10 @@ func (a *Account) Recieve(tx *gorm.DB, amount int64) error {
 	if err != nil {
 		return err
 	}
-	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).UpdateColumns(Account{
-		Balance:   balance,
-		InBalance: inBalance,
+
+	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).Updates(map[string]interface{}{
+		"balance":    balance,
+		"in_balance": inBalance,
 	}).Error
 }
 
@@ -117,7 +118,9 @@ func (a *Account) CancelTransfer(tx *gorm.DB, amount int64) error {
 	if err != nil {
 		return err
 	}
-	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).Update("out_balance", outBalance).Error
+	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).Updates(map[string]interface{}{
+		"out_balance": outBalance,
+	}).Error
 }
 
 func (a *Account) CancelRecieve(tx *gorm.DB, amount int64) error {
@@ -125,5 +128,7 @@ func (a *Account) CancelRecieve(tx *gorm.DB, amount int64) error {
 	if err != nil {
 		return err
 	}
-	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).Update("in_balance", inBalance).Error
+	return tx.Model(Account{}).Where("account_id = ?", a.AccountID).Updates(map[string]interface{}{
+		"in_balance": inBalance,
+	}).Error
 }

@@ -24,7 +24,7 @@ type Transaction struct {
 	CreatedAt            time.Time         `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt            time.Time         `gorm:"autoUpdateTime" json:"updated_at"`
 	Retries              int               `gorm:"-" json:"-"`
-	TransactionAmount    string            `gorm:"_" json:"transaction_amount,omitempty"`
+	TransactionAmount    string            `gorm:"-" json:"transaction_amount,omitempty"`
 }
 
 // TableName sets the insert table name for this struct type.
