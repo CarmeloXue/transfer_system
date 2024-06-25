@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"main/common/config"
 	"main/common/db"
 	"main/common/log"
 	"main/internal/account"
@@ -11,12 +13,18 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/viper"
 )
 
 func main() {
 
 	log.Init()
 	defer log.Cleanup()
+	config.Init()
+
+	fmt.Println(viper.GetInt("create_transaction_timeout"))
+	fmt.Println(viper.GetInt("max_retries"))
+	fmt.Println(viper.GetInt("try_timeout"))
 
 	r := gin.Default()
 

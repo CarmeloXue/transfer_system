@@ -10,15 +10,14 @@ import (
 	"main/model"
 	"time"
 
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 const (
 	DefaultCreateTransactionTimeoutSeconds = 3
 	DefaultTryTransactionTimeoutSeconds    = 1
-
-	MaxRetry = 3
+	MaxRetry                               = 3
 )
 
 var (
@@ -67,7 +66,8 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 		TransactionID:        utils.GenerateTransactionID(),
 		TransactionStatus:    model.Pending,
 	}
-	tCtx, cancel := context.WithTimeout(ctx, time.Second*DefaultCreateTransactionTimeoutSeconds)
+	timeoutSeconds := viper.GetInt("create_transaction_timeout")
+	tCtx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(timeoutSeconds))
 	defer cancel()
 	// Create pending transaction
 	err = s.repo.CreateTransaction(tCtx, trx)
@@ -132,7 +132,7 @@ func (s *service) processTransaction(ctx context.Context, transaction *model.Tra
 		}()
 		defer recovery.GoRecovery()
 
-		transaction.Retries = MaxRetry
+		transaction.Retries = viper.GetInt("max_retries")
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				s.retryCancel(ctx, transaction)
@@ -152,47 +152,37 @@ func (s *service) processTransaction(ctx context.Context, transaction *model.Tra
 
 func (s *service) retryCancel(ctx context.Context, tx *model.Transaction) {
 	log.GetSugger().Info("start to cancel transaction ", "transaction", tx)
-
-	if err := s.repo.Transaction(func(txn *gorm.DB) error {
-		var err error
-		for i := 0; i < tx.Retries; i++ {
-			log.GetSugger().Info("call cancel ", "transaction", tx.TransactionID, "err", err)
-			err = s.accountTCC.Cancel(ctx, tx.TransactionID)
-			log.GetSugger().Info("try cancel ", "transaction", tx.TransactionID, "err", err)
-			if err == nil || err == account.ErrEmptyRollback {
-				status := model.Refunded
-				if err == account.ErrEmptyRollback {
-					status = model.Failed
-				}
-				if err = txn.Model(model.Transaction{}).Where("transaction_id = ?", tx.TransactionID).Update("transaction_status", status).Error; err == nil {
-					return nil
-				}
+	var err error
+	for i := 0; i < tx.Retries; i++ {
+		log.GetSugger().Info("call cancel ", "transaction", tx.TransactionID, "err", err)
+		err = s.accountTCC.Cancel(ctx, tx.TransactionID)
+		log.GetSugger().Info("try cancel ", "transaction", tx.TransactionID, "err", err)
+		if err == nil || err == account.ErrEmptyRollback {
+			if err = s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Failed); err == nil {
+				return
 			}
-			time.Sleep(1 * time.Second)
 		}
-		return err
-	}); err != nil {
-		// TODO: alert
+		time.Sleep(30 * time.Millisecond)
+	}
+	if err != nil {
 		log.GetSugger().Error("failed to cancel transaction ", "transaction", tx, "err", err)
 	}
+
 }
 
 func (s *service) retryConfirm(ctx context.Context, tx *model.Transaction) {
 	log.GetLogger().With(zap.Any("transaction", tx)).Info("prepare to confirm")
 	var err error
-	if tErr := s.repo.Transaction(func(txn *gorm.DB) error {
-		for i := 0; i < tx.Retries; i++ {
-			err = s.accountTCC.Confirm(ctx, tx.TransactionID)
-			if err == nil {
-				if err = txn.Model(model.Transaction{}).Where("transaction_id = ?", tx.TransactionID).Update("transaction_status", model.Fulfiled).Error; err == nil {
-					return nil
-				}
+	for i := 0; i < tx.Retries; i++ {
+		err = s.accountTCC.Confirm(ctx, tx.TransactionID)
+		if err == nil {
+			if err = s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Fulfiled); err == nil {
+				return
 			}
-			// time.Sleep(1 * time.Second)
 		}
-		return err
-	}); tErr != nil {
-		// TODO: alert
+		time.Sleep(30 * time.Millisecond)
+	}
+	if err != nil {
 		log.GetSugger().Error("failed to confirm transaction ", "transaction", tx, "err", err)
 	}
 }
@@ -211,7 +201,7 @@ func (s *service) try(ctx context.Context, tx *model.Transaction) <-chan error {
 }
 
 func (s *service) tryWithTimeout(ctx context.Context, tx *model.Transaction) error {
-	timeOutCtx, cancel := context.WithTimeout(ctx, time.Second*DefaultTryTransactionTimeoutSeconds)
+	timeOutCtx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(viper.GetInt("try_timeout")))
 	defer cancel()
 
 	errChan := s.try(ctx, tx)

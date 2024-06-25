@@ -219,7 +219,7 @@ Below are the status of the transaction:
 - Pending. Transacion in pending status will not have any fund changes in any account. A pending transaction means all users are valid and the transaction can be made when service recieve this request based on user's balance. 
 - Processing. Transaction in pending status indicates source account have been deducted. Service start to deduct exact amount from source account. 
 - Fulfiled. Transaction in Fulfiled status indicates destination account have been topped up. Service add exact amount to destination account. 
-- Refunded. Transaction in Refunded status indicates previous deducted amount have been add back to source account, and destination account have no balance change in within this transacion. In rare cases(like the destination exceed amount limit), we need to return amount deducted from source acount back to it.
+- Failed. Transaction in Refunded status indicates previous tried, but the try action timeout in CreateTransaction api, so I'll call Cancel, to cancel the tried
 
 ### Fund Movement Stage
 

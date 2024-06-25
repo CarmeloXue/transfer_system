@@ -11,6 +11,7 @@ import (
 var (
 	ErrOverflow      = errors.New("amount overflow")
 	ErrTooManyDigits = errors.New("too many digits. only 6 digit allowed")
+	ErrNegativeValue = errors.New("negative value")
 )
 
 // ParseString parses a string into an int64, allowing up to 6 digits after the decimal point.
@@ -62,10 +63,18 @@ func FormatInt(i int64) string {
 	return fmt.Sprintf("%.6f", float64(i)/1e6)
 }
 
-// SafeAdd safely adds two int64 values, checking for overflow.
-func SafeAdd(a, b int64) (int64, error) {
-	if (b > 0 && a > math.MaxInt64-b) || (b < 0 && a < math.MinInt64-b) {
-		return 0, ErrOverflow
+// SafeAdd safely adds multiple int64 values, checking for overflow.
+func SafeAdd(nums ...int64) (int64, error) {
+	var sum int64
+	for _, num := range nums {
+		// Check for overflow
+		if (num > 0 && sum > math.MaxInt64-num) || (num < 0 && sum < math.MinInt64-num) {
+			return 0, ErrOverflow
+		}
+		sum += num
 	}
-	return a + b, nil
+	if sum < 0 {
+		return 0, ErrNegativeValue
+	}
+	return sum, nil
 }

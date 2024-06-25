@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"main/common/config"
 	"main/common/db/testutils"
 	"main/model"
 	"testing"
@@ -11,6 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 )
+
+func init() {
+	config.InitForTest()
+}
 
 func prepareRepo() (AccountRepository, error) {
 	db, err := testutils.SetupTestDB()

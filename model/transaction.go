@@ -11,7 +11,6 @@ var (
 	Pending    TransactionStatus = 1
 	Processing TransactionStatus = 2
 	Fulfiled   TransactionStatus = 3
-	Refunded   TransactionStatus = 4
 	Failed     TransactionStatus = 5
 )
 

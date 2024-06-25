@@ -3,6 +3,7 @@ package transaction
 import (
 	"context"
 	"fmt"
+	"main/common/config"
 	"main/common/db/testutils"
 	"main/common/utils"
 	"main/internal/account"
@@ -15,6 +16,10 @@ import (
 	"github.com/stretchr/testify/suite"
 	"gorm.io/gorm"
 )
+
+func init() {
+	config.InitForTest()
+}
 
 type transactionServiceSuite struct {
 	suite.Suite
@@ -71,7 +76,6 @@ func (s *transactionServiceSuite) Test_CreateTransaction_Happyflow() {
 		ctx     = context.Background()
 		service = s.newMockService()
 	)
-
 	trx, err := service.CreateTransaction(ctx, req)
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), trx)

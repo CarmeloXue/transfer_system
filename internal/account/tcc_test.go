@@ -61,7 +61,7 @@ func (s *tccSuite) Test_Try_Happyflow() {
 		trx = Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
-			DestinationAccountID: 22,
+			DestinationAccountID: 2,
 			Amount:               100000000,
 		}
 		err error
@@ -80,7 +80,7 @@ func (s *tccSuite) Test_Try_Happyflow() {
 		TransactionID: trx.TransactionID,
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(fm, trx, FMStageSourceOnHold)
+	s.validateFundMovement(fm, trx, Tried)
 }
 
 func (s *tccSuite) Test_Try_Insufficient_Should_ReturnError() {
@@ -188,7 +188,7 @@ func (s *tccSuite) Test_TryConfirm_HappyFlow() {
 		TransactionID: trx.TransactionID,
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(fm, trx, FMStageDestConfirmd)
+	s.validateFundMovement(fm, trx, Confirmed)
 
 	expectedAccs := []Account{
 		{
@@ -225,7 +225,7 @@ func (s *tccSuite) Test_TryCancel_HappyFlow() {
 		TransactionID: trx.TransactionID,
 	})
 	assert.NoError(s.T(), err)
-	s.validateFundMovement(rollback, trx, FMStageRollbacked)
+	s.validateFundMovement(rollback, trx, Canceled)
 
 	s.validateAccounts(ctx, s.defaultAccounts)
 }
@@ -250,7 +250,7 @@ func (s *tccSuite) Test_EmptyCancel_ShouldSuccess() {
 	}).Error
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(0), rollback.Amount)
-	assert.Equal(s.T(), FMStageRollbacked, rollback.Stage)
+	assert.Equal(s.T(), Canceled, rollback.Stage)
 
 	s.validateAccounts(ctx, s.defaultAccounts)
 }
@@ -280,7 +280,7 @@ func (s *tccSuite) Test_Try_Cancel_Confirm() {
 	})
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), refund)
-	s.validateFundMovement(refund, trx, FMStageRollbacked)
+	s.validateFundMovement(refund, trx, Canceled)
 
 	s.validateAccounts(ctx, s.defaultAccounts)
 }
@@ -309,7 +309,7 @@ func (s *tccSuite) Test_Cancel_Try() {
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), refund)
 	assert.Equal(s.T(), int64(0), refund.Amount)
-	assert.Equal(s.T(), FMStageRollbacked, refund.Stage)
+	assert.Equal(s.T(), Canceled, refund.Stage)
 	s.validateAccounts(ctx, s.defaultAccounts)
 }
 
