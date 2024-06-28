@@ -4,10 +4,8 @@ import (
 	"main/common/response"
 	"main/common/utils"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type Handler struct {
@@ -19,20 +17,27 @@ func NewHandler(service Service) *Handler {
 }
 
 func (h *Handler) CreateAccount(c *gin.Context) {
-	var req CreateAccountRequest
+	var (
+		req         CreateAccountRequest
+		returnError *error
+	)
+	// error handling. Map internal errors to external
+	defer func() {
+		if returnError != nil {
+			response.MapExternalErrors(c, *returnError, createHandlerErrors)
+			return
+		}
+		c.Status(http.StatusCreated)
+	}()
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorParam(c, err.Error())
+		returnError = &errInvalidRequest
 		return
 	}
 	if err := h.service.CreateAccount(c, req); err != nil {
-		if strings.Contains(err.Error(), "duplicate key") {
-			response.ErrorDuplicated(c, err.Error())
-			return
-		}
-		response.ErrorServer(c)
+		returnError = &err
 		return
 	}
-	c.Status(http.StatusCreated)
+
 }
 
 func (h *Handler) QueryAccount(c *gin.Context) {
@@ -43,11 +48,7 @@ func (h *Handler) QueryAccount(c *gin.Context) {
 	}
 	account, err := h.service.QueryAccount(c, req)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.ErrorNotFound(c)
-			return
-		}
-		response.ErrorServer(c)
+		response.MapExternalErrors(c, err, createHandlerErrors)
 		return
 	}
 	displayAccount := QueryResponse{
