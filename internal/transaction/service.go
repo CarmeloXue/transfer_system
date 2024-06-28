@@ -3,6 +3,7 @@ package transaction
 import (
 	"context"
 	"errors"
+	"main/common/config"
 	"main/common/log"
 	"main/common/recovery"
 	"main/common/utils"
@@ -52,11 +53,11 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 	}
 
 	if _, err := s.accountRepo.GetAccountByID(ctx, req.SourceAccountID); err != nil {
-		return model.Transaction{}, errors.New("invalid sender")
+		return model.Transaction{}, err
 	}
 
 	if _, err := s.accountRepo.GetAccountByID(ctx, req.DestinationAccountID); err != nil {
-		return model.Transaction{}, errors.New("invalid reciever")
+		return model.Transaction{}, err
 	}
 
 	trx := model.Transaction{
@@ -66,7 +67,7 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 		TransactionID:        utils.GenerateTransactionID(),
 		TransactionStatus:    model.Pending,
 	}
-	timeoutSeconds := viper.GetInt("create_transaction_timeout")
+	timeoutSeconds := viper.GetInt(config.ConfigKeyCreateTransactionTimeout)
 	tCtx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(timeoutSeconds))
 	defer cancel()
 	// Create pending transaction
@@ -131,7 +132,7 @@ func (s *service) processTransaction(ctx context.Context, transaction *model.Tra
 		}()
 		defer recovery.GoRecovery()
 
-		transaction.Retries = viper.GetInt("max_retries")
+		transaction.Retries = viper.GetInt(config.ConfigKeyMaxRetries)
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				s.retryCancel(ctx, transaction)
@@ -200,7 +201,7 @@ func (s *service) try(ctx context.Context, tx *model.Transaction) <-chan error {
 }
 
 func (s *service) tryWithTimeout(ctx context.Context, tx *model.Transaction) error {
-	timeOutCtx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(viper.GetInt("try_timeout")))
+	timeOutCtx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(viper.GetInt(config.ConfigKeyTryTimeout)))
 	defer cancel()
 
 	errChan := s.try(ctx, tx)

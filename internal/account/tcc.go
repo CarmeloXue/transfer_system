@@ -253,25 +253,6 @@ func selectFundmovementForUpdate(tx *gorm.DB, transactionID string) (*model.Fund
 	return &fundMovement, nil
 }
 
-func updateAccountBalance(tx *gorm.DB, accountID int, amount int64) error {
-	// Deduct user's balance
-	account := Account{}
-	if err := tx.First(&account, Account{
-		AccountID: accountID,
-	}).Error; err != nil {
-		return ErrFailedToLoadUser
-	}
-	newBalance := account.Balance + amount
-	if newBalance < 0 {
-		return ErrInsufficientBalance
-	}
-
-	if err := tx.Model(Account{}).Where("account_id = ?", account.AccountID).Update("balance", newBalance).Error; err != nil {
-		return ErrFailedToDeductSourceBalance
-	}
-	return nil
-}
-
 func loadAccounts(tx *gorm.DB, sourceID, destID int) (*Account, *Account, error) {
 	var (
 		sourceAcc Account

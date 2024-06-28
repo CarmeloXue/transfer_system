@@ -6,6 +6,12 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	ConfigKeyMaxRetries               = "max_retries"
+	ConfigKeyCreateTransactionTimeout = "create_transaction_timeout"
+	ConfigKeyTryTimeout               = "try_timeout"
+)
+
 func Init() {
 	viper.AddConfigPath("./")
 	viper.AddConfigPath("./config")

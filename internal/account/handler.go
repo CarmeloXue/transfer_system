@@ -51,7 +51,7 @@ func (h *Handler) QueryAccount(c *gin.Context) {
 	// error handling. Map internal errors to external
 	defer func() {
 		if returnError != nil {
-			response.MapExternalErrors(c, *returnError, createHandlerErrors)
+			response.MapExternalErrors(c, *returnError, queryHandlerErrors)
 			return
 		}
 		displayAccount := QueryResponse{

@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"context"
 	"errors"
 	"main/common/response"
 	"main/model"
@@ -39,8 +40,8 @@ func (h *Handler) CreateTransaction(c *gin.Context) {
 		return
 	}
 	trx, err = h.service.CreateTransaction(c, req)
-
-	if err != nil {
+	// When Exceed deadline, return a processing transaction
+	if err != nil && err != context.DeadlineExceeded {
 		returnError = &err
 		return
 	}
