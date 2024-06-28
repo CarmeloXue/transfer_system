@@ -28,7 +28,10 @@ func ParseString(s string) (int64, error) {
 	// Parse the float value
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return 0, err
+		if strings.Contains(err.Error(), "invalid syntax") {
+			return 0, err
+		}
+		return 0, ErrOverflow
 	}
 
 	// Scale the float to an int64

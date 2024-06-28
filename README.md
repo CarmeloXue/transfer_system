@@ -11,6 +11,10 @@ This transfer system facilitates financial transactions between accounts, ensuri
 - Docker
 - Docker Compose
 
+or
+
+- podman
+
 ### Installation
 
 1. Clone the repository:
@@ -24,9 +28,16 @@ This transfer system facilitates financial transactions between accounts, ensuri
     I put environment variables into docker-compose.yaml, such as db credentials. 
 
 3. Start
+
+  If you prefer docker, please use
    ```sh
-   make run
+   make run-docker
    ```
+
+  If you prefer podman, please use
+  ```sh
+  make run-podman
+  ```
   
 4. The application should now be running and listening to port `8081`, with Nginx proxying requests to the appropriate services.
 
@@ -48,6 +59,13 @@ I'm using int64 to save balance, so there is a balance limit there. When I user 
  - Inside system, I inflate float value by 100000 and used to do calculation
  - When return amount to user, will deflate by 100000
 
+### Error Handling
+
+In this demo, I defined two different errors:
+- Internal error. This is a internal error occurs inside system, may contains some confidential information
+- External error. This is the error return to end user. It has a http status code and a messge in response body.
+
+In each handler will have a error mapping, to map a internal error to a external error. For errors not exists in mapping, just return a http 500 with Internal Server Error.
 
 ### Account Service Endpoints
 

@@ -46,7 +46,7 @@ func (s *transactionServiceSuite) SetupTest() {
 		},
 	}
 
-	testutils.PrepareData[model.Account](s.accountDB, accouts)
+	testutils.PrepareData(s.accountDB, accouts)
 }
 
 func (s *transactionServiceSuite) TeardownTest() {
@@ -200,7 +200,6 @@ func (s *transactionServiceSuite) Test_TryTimeout_EmptyCancel_TransactionStatus_
 	inflatedValue, _ := utils.ParseString(req.Amount)
 	assert.Equal(s.T(), inflatedValue, trx.Amount)
 	assert.Equal(s.T(), model.Failed, trx.TransactionStatus)
-
 }
 
 func (s *transactionServiceSuite) validateAccounts(ctx context.Context, expectAccountStatus []model.Account) {

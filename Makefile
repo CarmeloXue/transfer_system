@@ -10,8 +10,10 @@ clean:
 	@echo "Cleaning build..."
 	@rm -rf bin/*
 
-run:
-	@golangci-lint run
+run-podman:
+	@podman compose up --build
+
+run-docker:
 	@docker-compose up --build
 
 down: 

@@ -55,7 +55,7 @@ func TestCreateAccount_Duplicated_ShouldReturnError(t *testing.T) {
 	assert.NoError(t, err, "failed to create account")
 
 	err = repo.CreateAccount(context.Background(), account)
-	assert.ErrorContains(t, err, "constraint")
+	assert.EqualError(t, errInternalDuplicatedAccount, err.Error())
 
 	count, err := repo.(*repository).countAccount(context.Background())
 	assert.NoError(t, err, "failed to create account")
