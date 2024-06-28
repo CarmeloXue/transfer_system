@@ -3,6 +3,7 @@ package account
 import (
 	"main/common/response"
 	"main/common/utils"
+	"main/model"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -41,19 +42,32 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 }
 
 func (h *Handler) QueryAccount(c *gin.Context) {
-	var req QueryAccountRequest
+	var (
+		req         QueryAccountRequest
+		returnError *error
+		account     model.Account
+	)
+
+	// error handling. Map internal errors to external
+	defer func() {
+		if returnError != nil {
+			response.MapExternalErrors(c, *returnError, createHandlerErrors)
+			return
+		}
+		displayAccount := QueryResponse{
+			AccountID: uint64(account.AccountID),
+			Balance:   utils.FormatInt(account.Balance),
+		}
+		response.Ok(c, displayAccount)
+	}()
 	if err := c.ShouldBindUri(&req); err != nil {
-		response.ErrorParam(c, err.Error())
+		returnError = &errInvalidRequest
 		return
 	}
 	account, err := h.service.QueryAccount(c, req)
 	if err != nil {
-		response.MapExternalErrors(c, err, createHandlerErrors)
+		returnError = &err
 		return
 	}
-	displayAccount := QueryResponse{
-		AccountID: uint64(account.AccountID),
-		Balance:   utils.FormatInt(account.Balance),
-	}
-	response.Ok(c, displayAccount)
+
 }

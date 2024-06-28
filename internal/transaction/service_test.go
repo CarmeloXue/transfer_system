@@ -46,7 +46,7 @@ func (s *transactionServiceSuite) SetupTest() {
 		},
 	}
 
-	testutils.PrepareData[model.Account](s.accountDB, accouts)
+	testutils.PrepareData(s.accountDB, accouts)
 }
 
 func (s *transactionServiceSuite) TeardownTest() {
