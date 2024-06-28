@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"main/common/log"
 	"main/common/utils"
+	"main/model"
 	. "main/model"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -55,8 +57,7 @@ func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccoun
 	)
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// check if transaction is already tried
-		var fundMovement FundMovement
-		err := tx.Model(FundMovement{}).First(&fundMovement, FundMovement{TransactionID: transactionID}).Error
+		fundMovement, err := selectFundmovementForUpdate(tx, transactionID)
 		// only proceed if no fund movement
 		if err != nil && err == gorm.ErrRecordNotFound {
 
@@ -129,9 +130,7 @@ func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
 	// check if transaction is already tried
 	log.GetLogger().Info(fmt.Sprintf("start confirm transaction %v", transactionID))
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var tried FundMovement
-		err := tx.Model(FundMovement{}).First(&tried, FundMovement{TransactionID: transactionID}).Error
-
+		tried, err := selectFundmovementForUpdate(tx, transactionID)
 		// call confirm before try is not allowed, so not check not found here
 		if err != nil {
 			logger.Error("failed to get fund movement status", "err", err)
@@ -183,13 +182,12 @@ func (s *tccService) Confirm(ctx context.Context, transactionID string) error {
  */
 func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 	var (
-		logger = log.GetSugger()
-		err    error
+		logger    = log.GetSugger()
+		globalErr error
 	)
 
 	txErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var tried FundMovement
-		err = tx.Model(FundMovement{}).First(&tried, FundMovement{TransactionID: transactionID}).Error
+		tried, err := selectFundmovementForUpdate(tx, transactionID)
 
 		// Cancel before try, put a rollback with 0 amount
 		if err == gorm.ErrRecordNotFound {
@@ -201,7 +199,7 @@ func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 			if err != nil {
 				return err
 			}
-			err = ErrEmptyRollback
+			globalErr = ErrEmptyRollback
 			return nil
 		}
 
@@ -241,10 +239,37 @@ func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 		return nil
 	})
 	// Empty rollback
-	if txErr == nil && err != nil {
-		return err
+	if txErr == nil && globalErr != nil {
+		return globalErr
 	}
 	return txErr
+}
+
+func selectFundmovementForUpdate(tx *gorm.DB, transactionID string) (*model.FundMovement, error) {
+	var fundMovement FundMovement
+	if err := tx.Model(FundMovement{}).Clauses(clause.Locking{Strength: "Update"}).First(&fundMovement, FundMovement{TransactionID: transactionID}).Error; err != nil {
+		return nil, err
+	}
+	return &fundMovement, nil
+}
+
+func updateAccountBalance(tx *gorm.DB, accountID int, amount int64) error {
+	// Deduct user's balance
+	account := Account{}
+	if err := tx.First(&account, Account{
+		AccountID: accountID,
+	}).Error; err != nil {
+		return ErrFailedToLoadUser
+	}
+	newBalance := account.Balance + amount
+	if newBalance < 0 {
+		return ErrInsufficientBalance
+	}
+
+	if err := tx.Model(Account{}).Where("account_id = ?", account.AccountID).Update("balance", newBalance).Error; err != nil {
+		return ErrFailedToDeductSourceBalance
+	}
+	return nil
 }
 
 func loadAccounts(tx *gorm.DB, sourceID, destID int) (*Account, *Account, error) {
@@ -253,10 +278,10 @@ func loadAccounts(tx *gorm.DB, sourceID, destID int) (*Account, *Account, error)
 		destAcc   Account
 		err       error
 	)
-	if err = tx.Model(Account{}).First(&sourceAcc, Account{AccountID: sourceID}).Error; err != nil {
+	if err = tx.Model(Account{}).Clauses(clause.Locking{Strength: "Update"}).First(&sourceAcc, Account{AccountID: sourceID}).Error; err != nil {
 		return nil, nil, err
 	}
-	if err = tx.Model(Account{}).First(&destAcc, Account{AccountID: destID}).Error; err != nil {
+	if err = tx.Model(Account{}).Clauses(clause.Locking{Strength: "Update"}).First(&destAcc, Account{AccountID: destID}).Error; err != nil {
 		return nil, nil, err
 	}
 
