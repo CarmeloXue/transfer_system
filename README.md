@@ -159,6 +159,7 @@ In each handler will have a error mapping, to map a internal error to a external
 3. **PostgreSQL**: Used as the database backend, with two databases:
    - **account_db**: Contains `account_tab` and `fund_movement_tab`.
    - **transaction_db**: Contains `transaction_tab`.
+4. Invalidator. It's a cronjob runs every 10 minutes, to load expired transactions in pending and processing status, and call Cancel to these transaction. If Cancel success, move them to Failed. If too many pending transactions, that means system have some issue.
 
 ### Database Schemas
 
@@ -198,6 +199,8 @@ For Account_tab. I maintained
   - `transaction_status` (INT)
   - `created_at` (TIMESTAMP)
   - `updated_at` (TIMESTAMP)
+  - `expired_at` (TIMESTAMP)
+
 
 ### System structure
 
