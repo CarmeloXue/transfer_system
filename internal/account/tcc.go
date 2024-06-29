@@ -103,9 +103,7 @@ func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccoun
 		}
 
 		switch fundMovement.Stage {
-		case Confirmed:
-			return nil
-		case Tried:
+		case Confirmed, Tried:
 			return nil
 		case Canceled:
 			return ErrRollbacked

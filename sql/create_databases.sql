@@ -41,7 +41,9 @@ CREATE TABLE IF NOT EXISTS transaction_tab (
     amount BIGINT NOT NULL,
     transaction_status INT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expired_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_transactions_status ON transaction_tab(transaction_status);
+CREATE INDEX idx_transactions_expired_status ON transaction_tab(expired_at, transaction_status);
