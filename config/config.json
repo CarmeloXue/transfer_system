@@ -1,5 +1,7 @@
 {
     "max_retries": 3,
     "try_timeout": 1,
-    "create_transaction_timeout": 3
+    "create_transaction_timeout": 3,
+    "transaction_expiration": 30,
+    "invalidate_interval_minutes": 10
 }

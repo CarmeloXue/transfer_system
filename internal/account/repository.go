@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"strings"
 
 	. "main/model"
 
@@ -28,6 +29,9 @@ func NewRepository(db *gorm.DB) AccountRepository {
 
 func (r *repository) CreateAccount(_ context.Context, account *Account) error {
 	if err := r.db.Create(account).Error; err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "constraint") {
+			return errInternalDuplicatedAccount
+		}
 		return err
 	}
 	return nil

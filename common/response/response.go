@@ -54,3 +54,41 @@ func ErrorNotFound(c *gin.Context) {
 		"data":    "",
 	})
 }
+
+func WithExternalResponse(c *gin.Context, resp ExternalResponse) {
+	c.JSON(resp.Code, gin.H{
+		"message": resp.Message,
+	})
+}
+
+func MapExternalErrors(c *gin.Context, err error, errMap map[error]*ExternalResponse) {
+	var (
+		response *ExternalResponse
+		errExist bool
+	)
+	defer func() {
+		if response == nil {
+			response = &ExternalResponse{
+				Code:    500,
+				Message: "Internal Server error",
+			}
+		}
+		c.JSON(response.Code, gin.H{
+			"message": response.Message,
+		})
+	}()
+
+	if errMap == nil {
+		return
+	}
+
+	response, errExist = errMap[err]
+	if !errExist {
+		return
+	}
+}
+
+type ExternalResponse struct {
+	Code    int
+	Message string
+}

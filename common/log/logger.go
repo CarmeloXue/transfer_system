@@ -16,7 +16,7 @@ var (
 	errorFile  *os.File
 	initLogger = initZapLogger
 
-	logDir   = "/var/log/api"
+	logDir   = "/var/log/"
 	infoLog  = "info.log"
 	errorLog = "error.log"
 )
@@ -25,6 +25,7 @@ func initZapLogger() {
 	var (
 		err error
 	)
+	logDir += os.Getenv("MODULDE")
 	if _, err = os.Stat(logDir); os.IsNotExist(err) {
 		_ = os.MkdirAll(logDir, os.ModePerm)
 	}

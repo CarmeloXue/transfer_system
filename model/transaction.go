@@ -23,6 +23,7 @@ type Transaction struct {
 	TransactionStatus    TransactionStatus `gorm:"type:int;not null" json:"transaction_status"`
 	CreatedAt            time.Time         `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt            time.Time         `gorm:"autoUpdateTime" json:"updated_at"`
+	ExpiredAt            time.Time         `gorm:"expired_at" json:"expired_at"`
 	Retries              int               `gorm:"-" json:"-"`
 	TransactionAmount    string            `gorm:"-" json:"transaction_amount,omitempty"`
 }

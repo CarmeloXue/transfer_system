@@ -11,6 +11,22 @@ services:
     depends_on:
       - api_server
 
+  invalidator:
+    build:
+      context: .
+      dockerfile: Dockerfile.invalidator
+    container_name: invalidator
+    environment:
+      - DATABASE_HOST=db
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=example
+      - DATABASE_PORT=5432
+      - MODULDE=invalidator
+    volumes:
+      - ./invalidator_logs:/var/log/invalidator
+    depends_on:
+      db:
+        condition: service_healthy
   api_server:
     build:
       context: .
@@ -23,8 +39,9 @@ services:
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=example
       - DATABASE_PORT=5432
+      - MODULDE=api
     volumes:
-      - ./logs:/var/log/api
+      - ./api_logs:/var/log/api
     depends_on:
       db:
         condition: service_healthy
