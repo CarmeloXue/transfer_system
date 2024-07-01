@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"main/common/log"
-	"main/common/utils"
 	"main/model"
 	. "main/model"
+	"main/tools/currency"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -68,7 +68,7 @@ func (s *tccService) Try(ctx context.Context, transactionID string, sourceAccoun
 			// lock source's amount
 			err = sourceAcc.TryTransfer(tx, amount)
 			if err != nil {
-				if err == utils.ErrNegativeValue {
+				if err == currency.ErrNegativeValue {
 					err = ErrInsufficientBalance
 				}
 				return err

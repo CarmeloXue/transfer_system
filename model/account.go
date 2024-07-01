@@ -1,7 +1,7 @@
 package model
 
 import (
-	"main/common/utils"
+	"main/tools/currency"
 	"time"
 
 	"gorm.io/gorm"
@@ -48,11 +48,11 @@ func (Account) TableName() string {
 
 func (a *Account) TryTransfer(tx *gorm.DB, amount int64) error {
 	// check if balance enough
-	if _, err := utils.SafeAdd(a.Balance, -a.OutBalance, -amount); err != nil {
+	if _, err := currency.SafeAdd(a.Balance, -a.OutBalance, -amount); err != nil {
 		return err
 	}
 	// return latest out balance
-	outBalance, err := utils.SafeAdd(a.OutBalance, amount)
+	outBalance, err := currency.SafeAdd(a.OutBalance, amount)
 	if err != nil {
 		return err
 	}
@@ -65,11 +65,11 @@ func (a *Account) Transfer(tx *gorm.DB, amount int64) error {
 		outBalance int64
 	)
 
-	balance, err := utils.SafeAdd(a.Balance, -amount)
+	balance, err := currency.SafeAdd(a.Balance, -amount)
 	if err != nil {
 		return err
 	}
-	outBalance, err = utils.SafeAdd(a.OutBalance, -amount)
+	outBalance, err = currency.SafeAdd(a.OutBalance, -amount)
 	if err != nil {
 		return err
 	}
@@ -81,11 +81,11 @@ func (a *Account) Transfer(tx *gorm.DB, amount int64) error {
 
 func (a *Account) TryReceive(tx *gorm.DB, amount int64) error {
 	// check if exceed limit
-	if _, err := utils.SafeAdd(a.Balance, a.InBalance, amount); err != nil {
+	if _, err := currency.SafeAdd(a.Balance, a.InBalance, amount); err != nil {
 		return err
 	}
 	// return latest in balance
-	inBalance, err := utils.SafeAdd(a.InBalance, amount)
+	inBalance, err := currency.SafeAdd(a.InBalance, amount)
 	if err != nil {
 		return err
 	}
@@ -98,11 +98,11 @@ func (a *Account) Recieve(tx *gorm.DB, amount int64) error {
 		inBalance int64
 	)
 
-	balance, err := utils.SafeAdd(a.Balance, amount)
+	balance, err := currency.SafeAdd(a.Balance, amount)
 	if err != nil {
 		return err
 	}
-	inBalance, err = utils.SafeAdd(a.InBalance, -amount)
+	inBalance, err = currency.SafeAdd(a.InBalance, -amount)
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func (a *Account) Recieve(tx *gorm.DB, amount int64) error {
 }
 
 func (a *Account) CancelTransfer(tx *gorm.DB, amount int64) error {
-	outBalance, err := utils.SafeAdd(a.OutBalance, -amount)
+	outBalance, err := currency.SafeAdd(a.OutBalance, -amount)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (a *Account) CancelTransfer(tx *gorm.DB, amount int64) error {
 }
 
 func (a *Account) CancelRecieve(tx *gorm.DB, amount int64) error {
-	inBalance, err := utils.SafeAdd(a.InBalance, -amount)
+	inBalance, err := currency.SafeAdd(a.InBalance, -amount)
 	if err != nil {
 		return err
 	}

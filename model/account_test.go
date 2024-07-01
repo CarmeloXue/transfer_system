@@ -1,8 +1,8 @@
 package model_test
 
 import (
-	"main/common/utils"
 	"main/model"
+	"main/tools/currency"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -73,7 +73,7 @@ func TestAccount_Transfer(t *testing.T) {
 	amount := int64(300000)
 
 	err := account.Transfer(db, amount)
-	assert.EqualError(t, utils.ErrNegativeValue, err.Error())
+	assert.EqualError(t, currency.ErrNegativeValue, err.Error())
 }
 
 func TestAccount_TryReceive(t *testing.T) {

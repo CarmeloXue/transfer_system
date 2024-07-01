@@ -6,9 +6,10 @@ import (
 	"main/common/config"
 	"main/common/log"
 	"main/common/recovery"
-	"main/common/utils"
 	"main/internal/account"
 	"main/model"
+	"main/tools/currency"
+	"main/tools/transactionid"
 	"time"
 
 	"github.com/spf13/viper"
@@ -47,7 +48,7 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 	if req.DestinationAccountID == req.SourceAccountID {
 		return model.Transaction{}, ErrSameAccountTransactions
 	}
-	inflatedValue, err := utils.ParseString(req.Amount)
+	inflatedValue, err := currency.ParseString(req.Amount)
 	if err != nil {
 		return model.Transaction{}, err
 	}
@@ -64,7 +65,7 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 		SourceAccountID:      req.SourceAccountID,
 		DestinationAccountID: req.DestinationAccountID,
 		Amount:               inflatedValue,
-		TransactionID:        utils.GenerateTransactionID(),
+		TransactionID:        transactionid.GenerateTransactionID(),
 		TransactionStatus:    model.Pending,
 	}
 	timeoutSeconds := viper.GetInt(config.ConfigKeyCreateTransactionTimeout)

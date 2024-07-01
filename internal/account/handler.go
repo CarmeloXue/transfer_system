@@ -2,8 +2,8 @@ package account
 
 import (
 	"main/common/response"
-	"main/common/utils"
 	"main/model"
+	"main/tools/currency"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -56,7 +56,7 @@ func (h *Handler) QueryAccount(c *gin.Context) {
 		}
 		displayAccount := QueryResponse{
 			AccountID: uint64(account.AccountID),
-			Balance:   utils.FormatInt(account.Balance),
+			Balance:   currency.FormatInt(account.Balance),
 		}
 		response.Ok(c, displayAccount)
 	}()

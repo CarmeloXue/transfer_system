@@ -1,7 +1,7 @@
 package model
 
 import (
-	"main/common/utils"
+	"main/tools/currency"
 	"time"
 )
 
@@ -34,6 +34,6 @@ func (Transaction) TableName() string {
 }
 
 func (t *Transaction) FormatForDisplay() {
-	t.TransactionAmount = utils.FormatInt(t.Amount)
+	t.TransactionAmount = currency.FormatInt(t.Amount)
 	t.Amount = 0
 }

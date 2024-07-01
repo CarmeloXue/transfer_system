@@ -3,7 +3,7 @@ package account
 import (
 	"context"
 	"main/common/log"
-	"main/common/utils"
+	"main/tools/currency"
 	"sync"
 
 	. "main/model"
@@ -39,7 +39,7 @@ func NewAccountService(db *gorm.DB) *accountService {
 }
 
 func (s *accountService) CreateAccount(ctx context.Context, req CreateAccountRequest) error {
-	inflatedValue, err := utils.ParseString(req.InitialBalance)
+	inflatedValue, err := currency.ParseString(req.InitialBalance)
 	if err != nil {
 		log.GetLogger().Error(err.Error())
 		return err

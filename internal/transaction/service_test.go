@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"main/common/config"
 	"main/common/db/testutils"
-	"main/common/utils"
 	"main/internal/account"
 	tcctestutils "main/internal/account/testutils"
+	"main/tools/currency"
 
 	"main/model"
 	"testing"
@@ -82,7 +82,7 @@ func (s *transactionServiceSuite) Test_CreateTransaction_Happyflow() {
 
 	assert.Equal(s.T(), req.SourceAccountID, trx.SourceAccountID)
 	assert.Equal(s.T(), req.DestinationAccountID, trx.DestinationAccountID)
-	inflatedValue, _ := utils.ParseString(req.Amount)
+	inflatedValue, _ := currency.ParseString(req.Amount)
 	assert.Equal(s.T(), inflatedValue, trx.Amount)
 }
 
@@ -197,7 +197,7 @@ func (s *transactionServiceSuite) Test_TryTimeout_EmptyCancel_TransactionStatus_
 
 	assert.Equal(s.T(), req.SourceAccountID, trx.SourceAccountID)
 	assert.Equal(s.T(), req.DestinationAccountID, trx.DestinationAccountID)
-	inflatedValue, _ := utils.ParseString(req.Amount)
+	inflatedValue, _ := currency.ParseString(req.Amount)
 	assert.Equal(s.T(), inflatedValue, trx.Amount)
 	assert.Equal(s.T(), model.Failed, trx.TransactionStatus)
 }
