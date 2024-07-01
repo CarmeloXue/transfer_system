@@ -1,11 +1,9 @@
 package main
 
 import (
-	"main/common/config"
-	"main/common/db"
-	"main/common/log"
-	"main/internal/account"
-	"main/internal/transaction"
+	"main/api"
+	"main/internal/common/config"
+	"main/tools/log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,36 +25,13 @@ func main() {
 
 	logger := log.GetLogger()
 	logger.Info("Server started")
-	accoundDB, err := db.GetAccountDBClient()
-	if err != nil {
-		panic("cannot connect to account database")
-	}
-	accountService := account.NewService(accoundDB)
 
-	// Initialize Handlers
-	accountHandler := account.NewHandler(accountService)
-
-	transactionDB, err := db.GetTransactionDB()
-	if err != nil {
-		panic("cannot connect to account database")
-	}
-	transactionHandler := transaction.NewHandler(transaction.NewService(transaction.NewRepository(transactionDB), account.NewTCCService(accoundDB), account.NewRepository(accoundDB)))
-
-	api := r.Group("/api/v1")
-	{
-		api.POST("/accounts", accountHandler.CreateAccount)
-		api.GET("/accounts/:account_id", accountHandler.QueryAccount)
-		api.POST("/transactions", transactionHandler.CreateTransaction)
-		api.GET("/transactions/:transaction_id", transactionHandler.QueryTransaction)
-		api.POST("/transactions/retry", transactionHandler.RetryTransaction)
-
-	}
+	api.NewRouter(r)
 
 	srv := &http.Server{
 		Addr:    ":8080",
 		Handler: r,
 	}
-
 	// Start the server in a goroutine
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

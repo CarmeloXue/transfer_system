@@ -1,9 +1,9 @@
 package account
 
 import (
-	"main/common/response"
-	"main/model"
+	accModel "main/internal/model/account"
 	"main/tools/currency"
+	"main/tools/response"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -31,7 +31,7 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 		c.Status(http.StatusCreated)
 	}()
 	if err := c.ShouldBindJSON(&req); err != nil {
-		returnError = &errInvalidRequest
+		returnError = &accModel.ErrInvalidRequest
 		return
 	}
 	if err := h.service.CreateAccount(c, req); err != nil {
@@ -45,7 +45,7 @@ func (h *Handler) QueryAccount(c *gin.Context) {
 	var (
 		req         QueryAccountRequest
 		returnError *error
-		account     model.Account
+		account     accModel.Account
 	)
 
 	// error handling. Map internal errors to external
@@ -61,7 +61,7 @@ func (h *Handler) QueryAccount(c *gin.Context) {
 		response.Ok(c, displayAccount)
 	}()
 	if err := c.ShouldBindUri(&req); err != nil {
-		returnError = &errInvalidRequest
+		returnError = &accModel.ErrInvalidRequest
 		return
 	}
 	account, err := h.service.QueryAccount(c, req)

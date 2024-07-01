@@ -2,11 +2,15 @@ package account
 
 import (
 	"context"
+	"errors"
 	"strings"
 
-	. "main/model"
-
 	"gorm.io/gorm"
+)
+
+var (
+	ErrInternalDuplicatedAccount = errors.New("duplicated account")
+	ErrInvalidRequest            = errors.New("invalid request")
 )
 
 // TODO: Add timeout in implementation
@@ -30,7 +34,7 @@ func NewRepository(db *gorm.DB) AccountRepository {
 func (r *repository) CreateAccount(_ context.Context, account *Account) error {
 	if err := r.db.Create(account).Error; err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "constraint") {
-			return errInternalDuplicatedAccount
+			return ErrInternalDuplicatedAccount
 		}
 		return err
 	}

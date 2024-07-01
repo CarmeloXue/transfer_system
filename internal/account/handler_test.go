@@ -3,7 +3,7 @@ package account
 import (
 	"bytes"
 	"encoding/json"
-	"main/common/db/testutils"
+	"main/internal/common/db/testutils"
 	"net/http/httptest"
 	"testing"
 

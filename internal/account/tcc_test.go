@@ -2,10 +2,11 @@ package account
 
 import (
 	"context"
-	"main/common/db/testutils"
+	"main/internal/common/db/testutils"
 	"testing"
 
-	. "main/model"
+	. "main/internal/model/account"
+	trxModel "main/internal/model/transaction"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -58,7 +59,7 @@ func (s *tccSuite) Test_Try_Happyflow() {
 	var (
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
-		trx = Transaction{
+		trx = trxModel.Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
@@ -87,7 +88,7 @@ func (s *tccSuite) Test_Try_Insufficient_Should_ReturnError() {
 	var (
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
-		trx = Transaction{
+		trx = trxModel.Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
@@ -104,7 +105,7 @@ func (s *tccSuite) Test_Confirm_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
 	var (
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
-		trx = Transaction{
+		trx = trxModel.Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
@@ -143,7 +144,7 @@ func (s *tccSuite) Test_Cancel_MultipleCall_Should_OnlyProceedOnce_ReturnOK() {
 	var (
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
-		trx = Transaction{
+		trx = trxModel.Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
@@ -171,7 +172,7 @@ func (s *tccSuite) Test_TryConfirm_HappyFlow() {
 	var (
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
-		trx = Transaction{
+		trx = trxModel.Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
@@ -207,7 +208,7 @@ func (s *tccSuite) Test_TryCancel_HappyFlow() {
 	var (
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
-		trx = Transaction{
+		trx = trxModel.Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
@@ -234,7 +235,7 @@ func (s *tccSuite) Test_EmptyCancel_ShouldSuccess() {
 	var (
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
-		trx = Transaction{
+		trx = trxModel.Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
@@ -259,7 +260,7 @@ func (s *tccSuite) Test_Try_Cancel_Confirm() {
 	var (
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
-		trx = Transaction{
+		trx = trxModel.Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
@@ -289,7 +290,7 @@ func (s *tccSuite) Test_Cancel_Try() {
 	var (
 		tcc = NewTCCService(s.mockDB)
 		ctx = context.Background()
-		trx = Transaction{
+		trx = trxModel.Transaction{
 			TransactionID:        "123",
 			SourceAccountID:      1,
 			DestinationAccountID: 2,
@@ -313,7 +314,7 @@ func (s *tccSuite) Test_Cancel_Try() {
 	s.validateAccounts(ctx, s.defaultAccounts)
 }
 
-func (s *tccSuite) validateFundMovement(fm *FundMovement, trx Transaction, stage FundMovementStage) {
+func (s *tccSuite) validateFundMovement(fm *FundMovement, trx trxModel.Transaction, stage FundMovementStage) {
 	assert.Equal(s.T(), trx.TransactionID, fm.TransactionID, "transaction_id not match")
 	assert.Equal(s.T(), trx.SourceAccountID, fm.SourceAccountID, "source_id not match")
 	assert.Equal(s.T(), trx.Amount, fm.Amount, "acount not match")

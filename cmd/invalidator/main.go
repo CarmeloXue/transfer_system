@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"main/common/config"
-	"main/common/db"
-	"main/common/log"
-	"main/common/recovery"
 	"main/internal/account"
-	"main/internal/transaction"
-	"main/model"
+	"main/internal/common/config"
+	"main/internal/common/db"
+	"main/internal/model/transaction"
+	"main/tools/log"
+	"main/tools/recovery"
 	"time"
 
 	"github.com/spf13/viper"
@@ -55,7 +54,7 @@ func main() {
 
 						}
 
-						if err := transactionRepo.UpdateTransactionStatus(ctx, txn.TransactionID, model.Failed); err != nil {
+						if err := transactionRepo.UpdateTransactionStatus(ctx, txn.TransactionID, transaction.Failed); err != nil {
 							log.GetSugger().Error("failed to invalidate transaction", "txn", txn.TransactionID)
 						}
 

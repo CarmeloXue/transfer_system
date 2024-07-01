@@ -1,6 +1,6 @@
 package recovery
 
-import "main/common/log"
+import "main/tools/log"
 
 // RecoverAndLog recovers from panics inside a goroutine and logs the panic information.
 func RecoverAndLog() {

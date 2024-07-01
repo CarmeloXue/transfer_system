@@ -4,9 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"main/common/config"
-	"main/model"
-	. "main/model"
+	"main/internal/common/config"
 	"time"
 
 	"github.com/spf13/viper"
@@ -16,9 +14,9 @@ import (
 type Repository interface {
 	CreateTransaction(ctx context.Context, transaction Transaction) error
 	GetTransactionByID(ctx context.Context, id string) (Transaction, error)
-	UpdateTransactionStatus(ctx context.Context, id string, status model.TransactionStatus) error
+	UpdateTransactionStatus(ctx context.Context, id string, status TransactionStatus) error
 	Transaction(fc func(tx *gorm.DB) error, opts ...*sql.TxOptions) error
-	QueryExpiredTransactions(ctx context.Context) ([]model.Transaction, error)
+	QueryExpiredTransactions(ctx context.Context) ([]Transaction, error)
 }
 
 type repository struct {
@@ -46,7 +44,7 @@ func (r *repository) GetTransactionByID(ctx context.Context, id string) (Transac
 	return transaction, nil
 }
 
-func (r *repository) UpdateTransactionStatus(ctx context.Context, id string, status model.TransactionStatus) error {
+func (r *repository) UpdateTransactionStatus(ctx context.Context, id string, status TransactionStatus) error {
 	return r.db.Model(&Transaction{}).Where("transaction_id = ?", id).Update("transaction_status", status).Error
 }
 
@@ -54,9 +52,9 @@ func (r *repository) Transaction(fc func(tx *gorm.DB) error, opts ...*sql.TxOpti
 	return r.db.Transaction(fc, opts...)
 }
 
-func (r *repository) QueryExpiredTransactions(ctx context.Context) ([]model.Transaction, error) {
+func (r *repository) QueryExpiredTransactions(ctx context.Context) ([]Transaction, error) {
 	var count int64
-	if err := r.db.Model(Transaction{}).Where("expired_at < ?", time.Now()).Where("transaction_status in ?", []model.TransactionStatus{Pending, Processing}).Count(&count).Error; err != nil {
+	if err := r.db.Model(Transaction{}).Where("expired_at < ?", time.Now()).Where("transaction_status in ?", []TransactionStatus{Pending, Processing}).Count(&count).Error; err != nil {
 		return nil, err
 	}
 
@@ -64,9 +62,9 @@ func (r *repository) QueryExpiredTransactions(ctx context.Context) ([]model.Tran
 		return nil, errors.New("too many pending/processing transactions")
 	}
 
-	var transactions []model.Transaction
+	var transactions []Transaction
 
-	if err := r.db.Model(Transaction{}).Where("expired_at < ?", time.Now()).Where("transaction_status in ?", []model.TransactionStatus{Pending, Processing}).Offset(0).Limit(200).Find(&transactions).Error; err != nil {
+	if err := r.db.Model(Transaction{}).Where("expired_at < ?", time.Now()).Where("transaction_status in ?", []TransactionStatus{Pending, Processing}).Offset(0).Limit(200).Find(&transactions).Error; err != nil {
 		return nil, err
 	}
 

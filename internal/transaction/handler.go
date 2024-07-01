@@ -3,8 +3,8 @@ package transaction
 import (
 	"context"
 	"errors"
-	"main/common/response"
-	"main/model"
+	"main/internal/model/transaction"
+	"main/tools/response"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -25,7 +25,7 @@ func (h *Handler) CreateTransaction(c *gin.Context) {
 		req         CreateTransactionRequest
 		returnError *error
 		err         error
-		trx         model.Transaction
+		trx         transaction.Transaction
 	)
 	defer func() {
 		if returnError != nil {

@@ -3,14 +3,18 @@ package transaction
 import (
 	"context"
 	"fmt"
-	"main/common/config"
-	"main/common/db/testutils"
+	"main/internal/common/config"
+	"main/internal/common/db/testutils"
 	"main/internal/account"
 	tcctestutils "main/internal/account/testutils"
+	"main/internal/model/transaction"
+
 	"main/tools/currency"
 
-	"main/model"
 	"testing"
+
+	accModel "main/internal/model/account"
+	trxModel "main/internal/model/transaction"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -31,11 +35,11 @@ func (s *transactionServiceSuite) SetupTest() {
 	s.accountDB, _ = testutils.SetupTestDB()
 	s.transactionDB, _ = testutils.SetupTestDB()
 
-	_ = s.accountDB.AutoMigrate(model.Account{})
-	_ = s.accountDB.AutoMigrate(model.FundMovement{})
-	_ = s.transactionDB.AutoMigrate(model.Transaction{})
+	_ = s.accountDB.AutoMigrate(accModel.Account{})
+	_ = s.accountDB.AutoMigrate(accModel.FundMovement{})
+	_ = s.transactionDB.AutoMigrate(trxModel.Transaction{})
 
-	accouts := []model.Account{
+	accouts := []accModel.Account{
 		{
 			AccountID: 1,
 			Balance:   10000000,
@@ -58,12 +62,12 @@ func (s *transactionServiceSuite) TeardownTest() {
 }
 
 func (s *transactionServiceSuite) newMockService() Service {
-	return NewService(NewRepository(s.transactionDB), tcctestutils.NewMockTCC(account.NewTCCService(s.accountDB), false, false, false), account.NewRepository(s.accountDB))
+	return NewService(transaction.NewRepository(s.transactionDB), tcctestutils.NewMockTCC(account.NewTCCService(s.accountDB), false, false, false), accModel.NewRepository(s.accountDB))
 }
 
 func (s *transactionServiceSuite) newMockServiceWithTCCTimeout(try, confirm, cancel bool) Service {
-	return NewService(NewRepository(s.transactionDB), tcctestutils.NewMockTCC(account.NewTCCService(s.accountDB), try, confirm,
-		cancel), account.NewRepository(s.accountDB))
+	return NewService(transaction.NewRepository(s.transactionDB), tcctestutils.NewMockTCC(account.NewTCCService(s.accountDB), try, confirm,
+		cancel), accModel.NewRepository(s.accountDB))
 }
 
 func (s *transactionServiceSuite) Test_CreateTransaction_Happyflow() {
@@ -168,7 +172,7 @@ func (s *transactionServiceSuite) Test_Multiple_Create_Happyflow() {
 
 	}
 
-	s.validateAccounts(ctx, []model.Account{
+	s.validateAccounts(ctx, []accModel.Account{
 		{
 			AccountID: 1,
 			Balance:   15000000,
@@ -199,11 +203,11 @@ func (s *transactionServiceSuite) Test_TryTimeout_EmptyCancel_TransactionStatus_
 	assert.Equal(s.T(), req.DestinationAccountID, trx.DestinationAccountID)
 	inflatedValue, _ := currency.ParseString(req.Amount)
 	assert.Equal(s.T(), inflatedValue, trx.Amount)
-	assert.Equal(s.T(), model.Failed, trx.TransactionStatus)
+	assert.Equal(s.T(), trxModel.Failed, trx.TransactionStatus)
 }
 
-func (s *transactionServiceSuite) validateAccounts(ctx context.Context, expectAccountStatus []model.Account) {
-	accRepo := account.NewRepository(s.accountDB)
+func (s *transactionServiceSuite) validateAccounts(ctx context.Context, expectAccountStatus []accModel.Account) {
+	accRepo := accModel.NewRepository(s.accountDB)
 	for _, acc := range expectAccountStatus {
 		resp, err := accRepo.GetAccountByID(ctx, acc.AccountID)
 		assert.NoError(s.T(), err)

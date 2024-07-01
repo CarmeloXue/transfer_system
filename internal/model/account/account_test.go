@@ -1,7 +1,6 @@
-package model_test
+package account
 
 import (
-	"main/model"
 	"main/tools/currency"
 	"testing"
 
@@ -36,7 +35,7 @@ func TestAccount_TryTransfer(t *testing.T) {
 		}
 	}()
 
-	account := model.Account{
+	account := Account{
 		AccountID:  1,
 		Balance:    1000000,
 		OutBalance: 200000,
@@ -65,7 +64,7 @@ func TestAccount_Transfer(t *testing.T) {
 		}
 	}()
 
-	account := model.Account{
+	account := Account{
 		AccountID:  1,
 		Balance:    1000000,
 		OutBalance: 200000,
@@ -84,7 +83,7 @@ func TestAccount_TryReceive(t *testing.T) {
 			db.Close()
 		}
 	}()
-	account := model.Account{
+	account := Account{
 		AccountID: 1,
 		Balance:   1000000,
 		InBalance: 200000,
@@ -110,7 +109,7 @@ func TestAccount_Receive(t *testing.T) {
 			db.Close()
 		}
 	}()
-	account := model.Account{
+	account := Account{
 		AccountID: 1,
 		Balance:   1000000,
 		InBalance: 300000,
@@ -136,7 +135,7 @@ func TestAccount_CancelTransfer(t *testing.T) {
 			db.Close()
 		}
 	}()
-	account := model.Account{
+	account := Account{
 		AccountID:  1,
 		Balance:    1000000,
 		OutBalance: 300000,
@@ -163,7 +162,7 @@ func TestAccount_CancelRecieve(t *testing.T) {
 			db.Close()
 		}
 	}()
-	account := model.Account{
+	account := Account{
 		AccountID: 1,
 		Balance:   1000000,
 		InBalance: 300000,

@@ -1,7 +1,7 @@
 package transaction
 
 import (
-	"main/common/response"
+	"main/tools/response"
 	"main/internal/account"
 	"main/tools/currency"
 

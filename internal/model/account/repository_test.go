@@ -2,12 +2,9 @@ package account
 
 import (
 	"context"
-	"main/common/config"
-	"main/common/db/testutils"
-	"main/model"
+	"main/internal/common/config"
+	"main/internal/common/db/testutils"
 	"testing"
-
-	. "main/model"
 
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
@@ -22,7 +19,7 @@ func prepareRepo() (AccountRepository, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = db.AutoMigrate(model.Account{})
+	_ = db.AutoMigrate(Account{})
 	return &repository{db}, nil
 }
 
@@ -55,7 +52,7 @@ func TestCreateAccount_Duplicated_ShouldReturnError(t *testing.T) {
 	assert.NoError(t, err, "failed to create account")
 
 	err = repo.CreateAccount(context.Background(), account)
-	assert.EqualError(t, errInternalDuplicatedAccount, err.Error())
+	assert.EqualError(t, ErrInternalDuplicatedAccount, err.Error())
 
 	count, err := repo.(*repository).countAccount(context.Background())
 	assert.NoError(t, err, "failed to create account")

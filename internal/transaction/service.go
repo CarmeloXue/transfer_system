@@ -3,12 +3,14 @@ package transaction
 import (
 	"context"
 	"errors"
-	"main/common/config"
-	"main/common/log"
-	"main/common/recovery"
 	"main/internal/account"
-	"main/model"
+	"main/internal/common/config"
+	accModel "main/internal/model/account"
+	trxModel "main/internal/model/transaction"
+
 	"main/tools/currency"
+	"main/tools/log"
+	"main/tools/recovery"
 	"main/tools/transactionid"
 	"time"
 
@@ -27,46 +29,46 @@ var (
 )
 
 type Service interface {
-	CreateTransaction(ctx context.Context, req CreateTransactionRequest) (model.Transaction, error)
-	QueryTransaction(ctx context.Context, req QueryTransactionRequest) (model.Transaction, error)
-	RetryTransaction(ctx context.Context, req QueryTransactionRequest) (model.Transaction, error)
+	CreateTransaction(ctx context.Context, req CreateTransactionRequest) (trxModel.Transaction, error)
+	QueryTransaction(ctx context.Context, req QueryTransactionRequest) (trxModel.Transaction, error)
+	RetryTransaction(ctx context.Context, req QueryTransactionRequest) (trxModel.Transaction, error)
 
 	// ConfirmTransaction(req ConfirmTransactionRequest) error
 }
 
 type service struct {
-	repo        Repository
+	repo        trxModel.Repository
 	accountTCC  account.TCC
-	accountRepo account.AccountRepository
+	accountRepo accModel.AccountRepository
 }
 
-func NewService(repo Repository, accountTCC account.TCC, accountRepo account.AccountRepository) Service {
+func NewService(repo trxModel.Repository, accountTCC account.TCC, accountRepo accModel.AccountRepository) Service {
 	return &service{repo: repo, accountTCC: accountTCC, accountRepo: accountRepo}
 }
 
-func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRequest) (model.Transaction, error) {
+func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRequest) (trxModel.Transaction, error) {
 	if req.DestinationAccountID == req.SourceAccountID {
-		return model.Transaction{}, ErrSameAccountTransactions
+		return trxModel.Transaction{}, ErrSameAccountTransactions
 	}
 	inflatedValue, err := currency.ParseString(req.Amount)
 	if err != nil {
-		return model.Transaction{}, err
+		return trxModel.Transaction{}, err
 	}
 
 	if _, err := s.accountRepo.GetAccountByID(ctx, req.SourceAccountID); err != nil {
-		return model.Transaction{}, err
+		return trxModel.Transaction{}, err
 	}
 
 	if _, err := s.accountRepo.GetAccountByID(ctx, req.DestinationAccountID); err != nil {
-		return model.Transaction{}, err
+		return trxModel.Transaction{}, err
 	}
 
-	trx := model.Transaction{
+	trx := trxModel.Transaction{
 		SourceAccountID:      req.SourceAccountID,
 		DestinationAccountID: req.DestinationAccountID,
 		Amount:               inflatedValue,
 		TransactionID:        transactionid.GenerateTransactionID(),
-		TransactionStatus:    model.Pending,
+		TransactionStatus:    trxModel.Pending,
 	}
 	timeoutSeconds := viper.GetInt(config.ConfigKeyCreateTransactionTimeout)
 	tCtx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(timeoutSeconds))
@@ -74,7 +76,7 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 	// Create pending transaction
 	err = s.repo.CreateTransaction(tCtx, trx)
 	if err != nil {
-		return model.Transaction{}, err
+		return trxModel.Transaction{}, err
 	}
 
 	trxChan, err := s.processTransaction(tCtx, &trx)
@@ -90,20 +92,20 @@ func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRe
 	return trx, err
 }
 
-func (s *service) QueryTransaction(ctx context.Context, req QueryTransactionRequest) (model.Transaction, error) {
+func (s *service) QueryTransaction(ctx context.Context, req QueryTransactionRequest) (trxModel.Transaction, error) {
 	return s.repo.GetTransactionByID(ctx, req.TransactionID)
 }
 
 // TODO: Better expose this as a cmd, not a http request
-func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequest) (model.Transaction, error) {
+func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequest) (trxModel.Transaction, error) {
 	tx, err := s.repo.GetTransactionByID(ctx, req.TransactionID)
 	if err != nil {
-		return model.Transaction{}, err
+		return trxModel.Transaction{}, err
 	}
 	tCtx, cancel := context.WithTimeout(ctx, time.Second*DefaultCreateTransactionTimeoutSeconds)
 	defer cancel()
 	// Start from try
-	if tx.TransactionStatus == model.Pending || tx.TransactionStatus == model.Processing {
+	if tx.TransactionStatus == trxModel.Pending || tx.TransactionStatus == trxModel.Processing {
 		trxChan, err := s.processTransaction(tCtx, &tx)
 
 		select {
@@ -120,38 +122,38 @@ func (s *service) RetryTransaction(ctx context.Context, req QueryTransactionRequ
 	return tx, nil
 }
 
-func (s *service) processTransaction(ctx context.Context, transaction *model.Transaction) (<-chan model.Transaction, error) {
-	err := s.tryWithTimeout(ctx, transaction)
-	transactionChan := make(chan model.Transaction)
+func (s *service) processTransaction(ctx context.Context, trx *trxModel.Transaction) (<-chan trxModel.Transaction, error) {
+	err := s.tryWithTimeout(ctx, trx)
+	transactionChan := make(chan trxModel.Transaction)
 	go func() {
 		defer close(transactionChan)
 		defer func() {
-			tx, err := s.repo.GetTransactionByID(ctx, transaction.TransactionID)
+			tx, err := s.repo.GetTransactionByID(ctx, trx.TransactionID)
 			if err == nil {
 				transactionChan <- tx
 			}
 		}()
 		defer recovery.GoRecovery()
 
-		transaction.Retries = viper.GetInt(config.ConfigKeyMaxRetries)
+		trx.Retries = viper.GetInt(config.ConfigKeyMaxRetries)
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
-				s.retryCancel(ctx, transaction)
+				s.retryCancel(ctx, trx)
 			} else {
-				_ = s.repo.UpdateTransactionStatus(ctx, transaction.TransactionID, model.Failed)
+				_ = s.repo.UpdateTransactionStatus(ctx, trx.TransactionID, trxModel.Failed)
 			}
 			return
 		}
 
-		_ = s.repo.UpdateTransactionStatus(ctx, transaction.TransactionID, model.Processing)
+		_ = s.repo.UpdateTransactionStatus(ctx, trx.TransactionID, trxModel.Processing)
 
-		s.retryConfirm(ctx, transaction)
+		s.retryConfirm(ctx, trx)
 	}()
 
 	return transactionChan, err
 }
 
-func (s *service) retryCancel(ctx context.Context, tx *model.Transaction) {
+func (s *service) retryCancel(ctx context.Context, tx *trxModel.Transaction) {
 	log.GetSugger().Info("start to cancel transaction ", "transaction", tx)
 	var err error
 	for i := 0; i < tx.Retries; i++ {
@@ -159,7 +161,7 @@ func (s *service) retryCancel(ctx context.Context, tx *model.Transaction) {
 		err = s.accountTCC.Cancel(ctx, tx.TransactionID)
 		log.GetSugger().Info("try cancel ", "transaction", tx.TransactionID, "err", err)
 		if err == nil || err == account.ErrEmptyRollback {
-			if err = s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Failed); err == nil {
+			if err = s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, trxModel.Failed); err == nil {
 				return
 			}
 		}
@@ -171,13 +173,13 @@ func (s *service) retryCancel(ctx context.Context, tx *model.Transaction) {
 
 }
 
-func (s *service) retryConfirm(ctx context.Context, tx *model.Transaction) {
+func (s *service) retryConfirm(ctx context.Context, tx *trxModel.Transaction) {
 	log.GetLogger().With(zap.Any("transaction", tx)).Info("prepare to confirm")
 	var err error
 	for i := 0; i < tx.Retries; i++ {
 		err = s.accountTCC.Confirm(ctx, tx.TransactionID)
 		if err == nil {
-			if err = s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, model.Fulfiled); err == nil {
+			if err = s.repo.UpdateTransactionStatus(ctx, tx.TransactionID, trxModel.Fulfiled); err == nil {
 				return
 			}
 		}
@@ -188,7 +190,7 @@ func (s *service) retryConfirm(ctx context.Context, tx *model.Transaction) {
 	}
 }
 
-func (s *service) try(ctx context.Context, tx *model.Transaction) <-chan error {
+func (s *service) try(ctx context.Context, tx *trxModel.Transaction) <-chan error {
 	errChan := make(chan error)
 
 	go func() {
@@ -201,7 +203,7 @@ func (s *service) try(ctx context.Context, tx *model.Transaction) <-chan error {
 	return errChan
 }
 
-func (s *service) tryWithTimeout(ctx context.Context, tx *model.Transaction) error {
+func (s *service) tryWithTimeout(ctx context.Context, tx *trxModel.Transaction) error {
 	timeOutCtx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(viper.GetInt(config.ConfigKeyTryTimeout)))
 	defer cancel()
 

@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"main/common/log"
-	"main/model"
-	. "main/model"
+	. "main/internal/model/account"
 	"main/tools/currency"
+	"main/tools/log"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -243,7 +242,7 @@ func (s *tccService) Cancel(ctx context.Context, transactionID string) error {
 	return txErr
 }
 
-func selectFundmovementForUpdate(tx *gorm.DB, transactionID string) (*model.FundMovement, error) {
+func selectFundmovementForUpdate(tx *gorm.DB, transactionID string) (*FundMovement, error) {
 	var fundMovement FundMovement
 	if err := tx.Model(FundMovement{}).Clauses(clause.Locking{Strength: "Update"}).First(&fundMovement, FundMovement{TransactionID: transactionID}).Error; err != nil {
 		return nil, err

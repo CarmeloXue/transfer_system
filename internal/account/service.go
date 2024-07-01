@@ -2,11 +2,11 @@ package account
 
 import (
 	"context"
-	"main/common/log"
 	"main/tools/currency"
+	"main/tools/log"
 	"sync"
 
-	. "main/model"
+	. "main/internal/model/account"
 
 	"gorm.io/gorm"
 )
