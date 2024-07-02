@@ -5,7 +5,7 @@ services:
     image: nginx:latest
     container_name: nginx
     ports:
-      - "8081:80"
+      - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf
     depends_on:
@@ -71,6 +71,44 @@ services:
       retries: 5
     volumes:
       - redis_data:/data
+  namesrv:
+    image: apache/rocketmq:4.9.1
+    container_name: rmqnamesrv
+    ports:
+      - 9876:9876
+    command: sh mqnamesrv
+    networks:
+      - rocketmq-net
+  broker:
+    image: apache/rocketmq:4.9.1
+    container_name: rmqbroker
+    ports:
+      - 10909:10909
+      - 10911:10911
+      - 10912:10912
+    command: sh mqbroker -n namesrv:9876 -c /etc/rocketmq/broker.conf
+    volumes:
+      - ./broker.conf:/etc/rocketmq/broker.conf
+    depends_on:
+      - namesrv
+    networks:
+      - rocketmq-net
+  rmqconsole:
+    image: styletang/rocketmq-console-ng
+    container_name: rmqconsole
+    ports:
+      - 8081:8080
+    environment:
+      - JAVA_OPTS=-Drocketmq.namesrv.addr=namesrv:9876 -Dcom.rocketmq.sendMessageWithVIPChannel=false
+    depends_on:
+      - namesrv
+      - broker
+    networks:
+      - rocketmq-net
+
+networks:
+  rocketmq-net:
+    driver: bridge
 volumes:
   db_data:
   redis_data:

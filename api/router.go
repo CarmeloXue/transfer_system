@@ -2,6 +2,7 @@ package api
 
 import (
 	"main/internal/account"
+	"main/internal/common/cache"
 	"main/internal/common/db"
 	accModel "main/internal/model/account"
 	trxModel "main/internal/model/transaction"
@@ -15,7 +16,11 @@ func NewRouter(r *gin.Engine) {
 	if err != nil {
 		panic("cannot connect to account database")
 	}
-	accountService := account.NewService(accoundDB)
+	accountCache, err := cache.NewRedisClient()
+	if err != nil {
+		panic("cannot connect to account database")
+	}
+	accountService := account.NewService(accoundDB, accountCache)
 
 	// Initialize Handlers
 	accountHandler := account.NewHandler(accountService)
@@ -27,12 +32,9 @@ func NewRouter(r *gin.Engine) {
 	transactionHandler := transaction.NewHandler(transaction.NewService(trxModel.NewRepository(transactionDB), account.NewTCCService(accoundDB), accModel.NewRepository(accoundDB)))
 
 	api := r.Group("/api/v1")
-	{
-		api.POST("/accounts", accountHandler.CreateAccount)
-		api.GET("/accounts/:account_id", accountHandler.QueryAccount)
-		api.POST("/transactions", transactionHandler.CreateTransaction)
-		api.GET("/transactions/:transaction_id", transactionHandler.QueryTransaction)
-		api.POST("/transactions/retry", transactionHandler.RetryTransaction)
-
-	}
+	api.POST("/accounts", accountHandler.CreateAccount)
+	api.GET("/accounts/:account_id", accountHandler.QueryAccount)
+	api.POST("/transactions", transactionHandler.CreateTransaction)
+	api.GET("/transactions/:transaction_id", transactionHandler.QueryTransaction)
+	api.POST("/transactions/retry", transactionHandler.RetryTransaction)
 }

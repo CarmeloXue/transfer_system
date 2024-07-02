@@ -85,3 +85,11 @@ func (h *Handler) RetryTransaction(c *gin.Context) {
 	}
 	response.Ok(c, trx)
 }
+
+// Create transaction, and send message to MQ in transaction.
+// func (h *Handler) CreateTransactionAsync(c *gin.Context) {
+// 	var (
+// 		req CreateTransactionRequest
+// 		err error
+// 	)
+// }

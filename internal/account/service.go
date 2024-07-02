@@ -1,13 +1,17 @@
 package account
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"main/tools/currency"
 	"main/tools/log"
 	"sync"
 
 	. "main/internal/model/account"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
@@ -17,12 +21,14 @@ type Service interface {
 }
 
 type accountService struct {
-	repo AccountRepository
+	repo  AccountRepository
+	cache *redis.Client
 }
 
-func NewService(db *gorm.DB) Service {
+func NewService(db *gorm.DB, cache *redis.Client) Service {
 	return &accountService{
-		repo: NewRepository(db),
+		repo:  NewRepository(db),
+		cache: cache,
 	}
 }
 
@@ -58,5 +64,19 @@ func (s *accountService) CreateAccount(ctx context.Context, req CreateAccountReq
 }
 
 func (s *accountService) QueryAccount(ctx context.Context, req QueryAccountRequest) (Account, error) {
+	bs, _ := s.cache.Get(ctx, s.getAccountIdCacheKey(int(req.AccountID))).Bytes()
+
+	if len(bs) != 0 {
+		var account Account
+		if err := json.NewDecoder(bytes.NewReader(bs)).Decode(&account); err == nil {
+			return account, nil
+		}
+	}
+
+	// if read from redis have issue, read from db
 	return s.repo.GetAccountByID(ctx, int(req.AccountID))
+}
+
+func (s *accountService) getAccountIdCacheKey(accountID int) string {
+	return fmt.Sprintf("cache_key-account-%d", accountID)
 }

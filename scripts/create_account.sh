@@ -19,7 +19,7 @@ install_jq() {
 # Check and install jq
 install_jq
 # API endpoint URL
-BASE_URL="http://localhost:8081/api/v1/accounts"
+BASE_URL="http://localhost/api/v1/accounts"
 
 # Read data from accounts.json and iterate over each object
 cat account.json | jq -c '.[]' | while read -r payload; do
