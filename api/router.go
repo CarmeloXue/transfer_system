@@ -4,6 +4,7 @@ import (
 	"main/internal/account"
 	"main/internal/common/cache"
 	"main/internal/common/db"
+	"main/internal/common/queue"
 	accModel "main/internal/model/account"
 	trxModel "main/internal/model/transaction"
 	"main/internal/transaction"
@@ -29,7 +30,19 @@ func NewRouter(r *gin.Engine) {
 	if err != nil {
 		panic("cannot connect to account database")
 	}
-	transactionHandler := transaction.NewHandler(transaction.NewService(trxModel.NewRepository(transactionDB), account.NewTCCService(accoundDB), accModel.NewRepository(accoundDB)))
+	messenger, err := queue.NewTransactionProducer(&transaction.TransactionMessageHandler{
+		Topic: transaction.TransactionCreationTopic,
+	})
+	if err != nil {
+		panic("cannot connect to account database")
+	}
+
+	transactionHandler := transaction.NewHandler(
+		transaction.NewService(trxModel.NewRepository(transactionDB),
+			account.NewTCCService(accoundDB),
+			accModel.NewRepository(accoundDB),
+			messenger),
+	)
 
 	api := r.Group("/api/v1")
 	api.POST("/accounts", accountHandler.CreateAccount)

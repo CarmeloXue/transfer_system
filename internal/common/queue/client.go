@@ -10,8 +10,9 @@ import (
 	"github.com/apache/rocketmq-client-go/v2/producer"
 )
 
-func NewProducer() (rocketmq.Producer, error) {
-	p, err := rocketmq.NewProducer(
+func NewTransactionProducer(listener primitive.TransactionListener) (rocketmq.TransactionProducer, error) {
+	p, err := rocketmq.NewTransactionProducer(
+		listener,
 		producer.WithNameServer([]string{"localhost:9876"}),
 		producer.WithGroupName("testGroup"),
 	)

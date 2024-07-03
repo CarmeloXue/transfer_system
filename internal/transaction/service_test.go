@@ -3,10 +3,11 @@ package transaction
 import (
 	"context"
 	"fmt"
-	"main/internal/common/config"
-	"main/internal/common/db/testutils"
 	"main/internal/account"
 	tcctestutils "main/internal/account/testutils"
+	"main/internal/common/config"
+	"main/internal/common/db/testutils"
+	"main/internal/common/queue"
 	"main/internal/model/transaction"
 
 	"main/tools/currency"
@@ -62,12 +63,14 @@ func (s *transactionServiceSuite) TeardownTest() {
 }
 
 func (s *transactionServiceSuite) newMockService() Service {
-	return NewService(transaction.NewRepository(s.transactionDB), tcctestutils.NewMockTCC(account.NewTCCService(s.accountDB), false, false, false), accModel.NewRepository(s.accountDB))
+	messenger, _ := queue.NewTransactionProducer(&TransactionMessageHandler{})
+	return NewService(transaction.NewRepository(s.transactionDB), tcctestutils.NewMockTCC(account.NewTCCService(s.accountDB), false, false, false), accModel.NewRepository(s.accountDB), messenger)
 }
 
 func (s *transactionServiceSuite) newMockServiceWithTCCTimeout(try, confirm, cancel bool) Service {
+	messenger, _ := queue.NewTransactionProducer(&TransactionMessageHandler{})
 	return NewService(transaction.NewRepository(s.transactionDB), tcctestutils.NewMockTCC(account.NewTCCService(s.accountDB), try, confirm,
-		cancel), accModel.NewRepository(s.accountDB))
+		cancel), accModel.NewRepository(s.accountDB), messenger)
 }
 
 func (s *transactionServiceSuite) Test_CreateTransaction_Happyflow() {

@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"main/internal/account"
 	"main/internal/common/config"
@@ -14,6 +15,8 @@ import (
 	"main/tools/transactionid"
 	"time"
 
+	"github.com/apache/rocketmq-client-go/v2"
+	"github.com/apache/rocketmq-client-go/v2/primitive"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -22,6 +25,7 @@ const (
 	DefaultCreateTransactionTimeoutSeconds = 3
 	DefaultTryTransactionTimeoutSeconds    = 1
 	MaxRetry                               = 3
+	TransactionCreationTopic               = "create_transaction"
 )
 
 var (
@@ -40,10 +44,52 @@ type service struct {
 	repo        trxModel.Repository
 	accountTCC  account.TCC
 	accountRepo accModel.AccountRepository
+	messenger   rocketmq.TransactionProducer
 }
 
-func NewService(repo trxModel.Repository, accountTCC account.TCC, accountRepo accModel.AccountRepository) Service {
-	return &service{repo: repo, accountTCC: accountTCC, accountRepo: accountRepo}
+func NewService(repo trxModel.Repository, accountTCC account.TCC, accountRepo accModel.AccountRepository, messenger rocketmq.TransactionProducer) Service {
+	return &service{repo: repo, accountTCC: accountTCC, accountRepo: accountRepo, messenger: messenger}
+}
+
+// CreateTransactionAsync create a processing transaction, and send message to push account service to execute fund movement
+func (s *service) CreateTransactionAsync(ctx context.Context, req CreateTransactionRequest) (trxModel.Transaction, error) {
+	if req.DestinationAccountID == req.SourceAccountID {
+		return trxModel.Transaction{}, ErrSameAccountTransactions
+	}
+	inflatedValue, err := currency.ParseString(req.Amount)
+	if err != nil {
+		return trxModel.Transaction{}, err
+	}
+
+	if _, err := s.accountRepo.GetAccountByID(ctx, req.SourceAccountID); err != nil {
+		return trxModel.Transaction{}, err
+	}
+
+	if _, err := s.accountRepo.GetAccountByID(ctx, req.DestinationAccountID); err != nil {
+		return trxModel.Transaction{}, err
+	}
+
+	trx := trxModel.Transaction{
+		SourceAccountID:      req.SourceAccountID,
+		DestinationAccountID: req.DestinationAccountID,
+		Amount:               inflatedValue,
+		TransactionID:        transactionid.GenerateTransactionID(),
+		TransactionStatus:    trxModel.Processing,
+	}
+	body, err := json.Marshal(trx)
+	if err != nil {
+		return trxModel.Transaction{}, err
+	}
+	msg := primitive.Message{
+		Topic: TransactionCreationTopic,
+		Body:  body,
+	}
+	result, err := s.messenger.SendMessageInTransaction(ctx, &msg)
+
+	if err != nil || result.Status == primitive.SendUnknownError {
+		return trxModel.Transaction{}, err
+	}
+	return trx, nil
 }
 
 func (s *service) CreateTransaction(ctx context.Context, req CreateTransactionRequest) (trxModel.Transaction, error) {
