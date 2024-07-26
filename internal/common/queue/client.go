@@ -7,24 +7,10 @@ import (
 	"github.com/apache/rocketmq-client-go/v2"
 	"github.com/apache/rocketmq-client-go/v2/consumer"
 	"github.com/apache/rocketmq-client-go/v2/primitive"
-	"github.com/apache/rocketmq-client-go/v2/producer"
 )
 
 func NewTransactionProducer(listener primitive.TransactionListener) (rocketmq.TransactionProducer, error) {
-	p, err := rocketmq.NewTransactionProducer(
-		listener,
-		producer.WithNameServer([]string{"localhost:9876"}),
-		producer.WithGroupName("testGroup"),
-	)
-	if err != nil {
-		return nil, err
-	}
-	err = p.Start()
-	if err != nil {
-		fmt.Printf("start producer error: %s\n", err.Error())
-		return nil, err
-	}
-	return p, nil
+	return nil, nil
 }
 
 type ConsumeHandler func(ctx context.Context, msgs ...*primitive.MessageExt) (consumer.ConsumeResult, error)

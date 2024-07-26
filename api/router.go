@@ -34,7 +34,7 @@ func NewRouter(r *gin.Engine) {
 		Topic: transaction.TransactionCreationTopic,
 	})
 	if err != nil {
-		panic("cannot connect to account database")
+		panic("cannot connect to producer database")
 	}
 
 	transactionHandler := transaction.NewHandler(

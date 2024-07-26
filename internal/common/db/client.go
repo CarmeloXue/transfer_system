@@ -42,7 +42,7 @@ func GetAccountDBClient() (*gorm.DB, error) {
 		}
 	})
 
-	log.GetLogger().Sugar().Infof("db %v,", accountDB)
+	log.GetLogger().Sugar().Infof("db %v, db == nil %v", accountDB, accountDB == nil)
 
 	if accountDB == nil {
 		return nil, errors.New("failed to init database")
