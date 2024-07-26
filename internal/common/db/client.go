@@ -36,10 +36,14 @@ func GetAccountDBClient() (*gorm.DB, error) {
 
 		var err error
 		accountDB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+
 		if err != nil {
 			log.GetLogger().Sugar().Infof("failed to connect database: %v", err)
 		}
 	})
+
+	log.GetLogger().Sugar().Infof("db %v,", accountDB)
+
 	if accountDB == nil {
 		return nil, errors.New("failed to init database")
 	}
