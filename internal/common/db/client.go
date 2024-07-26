@@ -32,6 +32,7 @@ func GetAccountDBClient() (*gorm.DB, error) {
 		dbPassword := os.Getenv("DATABASE_PASSWORD")
 		dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 			dbHost, dbPort, dbUser, dbPassword, accountDBName)
+		log.GetLogger().Sugar().Infof("connecting to db: %v", dsn)
 
 		var err error
 		accountDB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})

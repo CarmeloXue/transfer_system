@@ -49,7 +49,7 @@ services:
     container_name: db
     environment:
       POSTGRES_DB: mydb
-      POSTGRES_USER: postgres
+      POSTGRES_USER:  
       POSTGRES_PASSWORD: example
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
