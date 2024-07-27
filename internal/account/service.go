@@ -1,15 +1,12 @@
 package account
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	. "main/internal/model/account"
 	"main/tools/currency"
 	"main/tools/log"
 	"sync"
-
-	. "main/internal/model/account"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -64,15 +61,6 @@ func (s *accountService) CreateAccount(ctx context.Context, req CreateAccountReq
 }
 
 func (s *accountService) QueryAccount(ctx context.Context, req QueryAccountRequest) (Account, error) {
-	bs, _ := s.cache.Get(ctx, s.getAccountIdCacheKey(int(req.AccountID))).Bytes()
-
-	if len(bs) != 0 {
-		var account Account
-		if err := json.NewDecoder(bytes.NewReader(bs)).Decode(&account); err == nil {
-			return account, nil
-		}
-	}
-
 	// if read from redis have issue, read from db
 	return s.repo.GetAccountByID(ctx, int(req.AccountID))
 }
